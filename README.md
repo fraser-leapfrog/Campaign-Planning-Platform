@@ -1,15 +1,21 @@
-# Leapfrog Campaign Board — internal deploy (GitHub + Cloudflare Pages)
+# Leapfrog Campaign Board — internal deploy (GitHub + Cloudflare Workers)
 
-A Cloudflare Pages site (static front-end + Pages Functions API + D1
-database) showing the same Campaign Board, with shared, synced data instead
-of per-browser localStorage.
+A Cloudflare Worker (static assets + a small API + D1 database) showing the
+same Campaign Board, with shared, synced data instead of per-browser
+localStorage.
 
-This version deploys straight from a GitHub repo: **every time you `git
-push`, Cloudflare rebuilds and redeploys automatically.** In practice, that
-means you can ask Claude to make a change in a future session, Claude
-commits and pushes, and the live site updates within about 30 seconds —
-no terminal commands, no Wrangler CLI, no Node.js required on your end at
-all.
+> **Note on naming:** Cloudflare's dashboard now shows this as a "Worker"
+> project, not "Pages" — Cloudflare merged the two systems, and a
+> Git-connected static site with an API is what that unified system calls a
+> "Worker with static assets." Functionally it's exactly what you'd expect
+> from "Pages": a static site + API, deployed from Git. The distinction only
+> matters for which dashboard screens you use (see below).
+
+This deploys straight from a GitHub repo: **every time you `git push`,
+Cloudflare rebuilds and redeploys automatically.** In practice, that means
+you can ask Claude to make a change in a future session, Claude commits and
+pushes, and the live site updates within about 30 seconds — no terminal
+commands, no Wrangler CLI, no Node.js required on your end at all.
 
 Access is locked down with **Cloudflare Access**, gated to your company
 email domain — there is no point where the URL is reachable without signing
@@ -17,92 +23,84 @@ in with a matching email.
 
 Total cost: **$0** on Cloudflare's free tier for a team this size.
 
-The code is already a git repo on this Mac with one commit in it
-(`git log` in this folder will show it). The steps below get it onto GitHub
-and connected to Cloudflare — everything from here on is clicking around in
-two websites, plus one one-time login in Terminal.
-
 ---
 
 ## 1. Create a private GitHub repo (2 minutes, no installs)
 
 1. Go to <https://github.com/new> (create a free GitHub account first at
    <https://github.com/signup> if you don't have one).
-2. Repository name: `leapfrog-campaign-board`.
+2. Repository name: whatever you like (this project used
+   `Campaign-Planning-Platform`).
 3. Set it to **Private**.
-4. Do **not** check "Add a README" or any other init option — this repo
-   already has files, an empty one avoids a conflict.
-5. Click **Create repository**. On the next page, copy the URL under
-   "…or push an existing repository from the command line" — it looks like
-   `https://github.com/<your-username>/leapfrog-campaign-board.git`.
+4. Do **not** check "Add a README" or any other init option — an empty repo
+   avoids a merge conflict with the code you're about to push.
+5. Click **Create repository**, then copy the HTTPS URL shown under "…or
+   push an existing repository from the command line."
 
-## 2. Push the code (one-time — this is the only Terminal step)
+## 2. Push the code (one-time — the only Terminal step)
 
 Open **Terminal** (Spotlight → "Terminal"), then:
 
 ```bash
 cd ~/Downloads/leapfrog-campaign-app
-git remote add origin https://github.com/<your-username>/leapfrog-campaign-board.git
+git remote add origin <your-repo-url>.git
 git branch -M main
 git push -u origin main
 ```
 
-Swap in your actual repo URL from step 1. The first push will prompt for
-GitHub credentials in the terminal — GitHub no longer accepts your account
-password here, so when asked:
+The first push prompts for GitHub credentials — GitHub only accepts a
+**Personal Access Token** here, never your account password (Google-SSO
+accounts included — the token is a separate credential type from how you
+sign into github.com):
 
-- **Username:** your GitHub username
-- **Password:** a **Personal Access Token**, not your real password — create
-  one at <https://github.com/settings/personal-access-tokens/new>: give it
-  a name, set expiration to whatever you're comfortable with, under
-  "Repository access" pick "Only select repositories" → this repo, and
-  under "Permissions" → "Repository permissions" → Contents → **Read and
-  write**. Generate it, copy it, paste it as the password when Terminal
-  asks. (macOS will offer to remember it in Keychain — say yes, so you
-  never have to do this again, and so future git pushes — including ones
-  Claude runs for you — just work.)
+1. Create one at <https://github.com/settings/personal-access-tokens/new>.
+2. "Repository access" → "Only select repositories" → this repo.
+3. "Permissions" → "Repository permissions" → Contents → **Read and
+   write**. Generate, copy it.
+4. When Terminal asks for a password, paste the token (it pastes invisibly —
+   that's normal).
 
-Once this succeeds, refresh the GitHub repo page in your browser — you
-should see all the project files there.
+macOS will offer to remember it in Keychain — say yes, so future pushes
+(including ones Claude runs for you) just work without asking again.
 
-## 3. Connect Cloudflare Pages to the repo
+## 3. Connect Cloudflare to the repo
 
-1. Go to <https://dash.cloudflare.com/sign-up> and create a free account if
-   you haven't already (your work email is fine).
-2. In the dashboard sidebar: **Workers & Pages** → **Create** → **Pages**
-   tab → **Connect to Git**.
-3. Authorize Cloudflare's GitHub App when prompted, and grant it access to
-   the `leapfrog-campaign-board` repo specifically (not all repos, unless
-   you're fine with that).
-4. Select the repo, then set build settings:
-   - **Framework preset:** None
-   - **Build command:** *(leave blank)*
-   - **Build output directory:** `public`
-5. Click **Save and Deploy**. First deploy takes under a minute. You'll get
-   a URL like `https://leapfrog-campaign-board.pages.dev` — **don't share
-   it yet**, it's wide open until step 5.
+1. Create a free account at <https://dash.cloudflare.com/sign-up> if you
+   haven't already.
+2. Dashboard → **Compute (Workers)** (or however your sidebar labels it —
+   Cloudflare has renamed this section a few times) → **Create** →
+   **Connect to Git** (sometimes under an "Import a repository" option).
+3. Authorize Cloudflare's GitHub App, scoped to this repo specifically.
+4. Cloudflare reads `wrangler.toml` in the repo automatically — it already
+   declares the Worker entry point (`worker/index.js`), the static assets
+   directory (`public/`), and the D1 binding, so there's nothing to
+   configure by hand in the build settings. Click through to deploy.
+5. You'll get a URL like `https://leapfrog-campaign-board.<subdomain>.workers.dev`
+   — **don't share it yet**, it's wide open until step 5.
 
-## 4. Create and seed the database — all in the dashboard, no CLI
+## 4. Create and seed the database — dashboard console, no CLI
 
-1. In the Cloudflare dashboard: **Workers & Pages** → **D1 SQL Database** →
-   **Create Database**. Name it `leapfrog_campaigns`.
-2. Open the new database → **Console** tab. Paste the contents of
+1. Dashboard sidebar → **Storage & Databases** → **D1** → **Create
+   Database**. Name it `leapfrog_campaigns`.
+2. On the database's **Overview** tab, copy the **Database ID** (a UUID) —
+   paste it into `wrangler.toml` in this repo, replacing
+   `REPLACE_WITH_ID_FROM_D1_DASHBOARD`, then commit and push. This is the
+   one manual edit needed — **for a Git-connected Worker, bindings live in
+   `wrangler.toml`, not in the dashboard's Bindings screen** (that screen
+   won't let changes stick, by design — code is the source of truth here).
+3. Back on the database → **Console** tab: paste the contents of
    `schema.sql` (in this folder) into the query box and run it.
-3. Then paste the contents of `seed.sql` and run it — this loads your 94
-   existing campaigns in one go.
-4. Go back to your Pages project → **Settings** → **Functions** → **D1
-   database bindings** → **Add binding**:
-   - Variable name: `DB`
-   - D1 database: `leapfrog_campaigns`
-5. Save, then go to **Deployments** and **Retry deployment** on the latest
-   one (bindings only take effect on a fresh deploy).
+4. Paste the contents of `seed.sql` and run it — loads your 94 existing
+   campaigns in one go.
+5. Push the `wrangler.toml` change from step 2 (if not already done) —
+   Cloudflare redeploys automatically and picks up the binding.
 
 ## 5. Lock it down with Cloudflare Access — do this before sharing the link
 
 1. **Zero Trust** → **Access** → **Applications** → **Add an application**
    → **Self-hosted**.
-2. Application domain: your Pages URL (`leapfrog-campaign-board.pages.dev`),
-   path `/` so it covers the API routes too.
+2. Application domain: your Worker's URL, path `/` so it covers the API
+   routes too.
 3. Add a policy: **Include** → **Emails ending in** →
    `@leapfrogadvertising.com` (or list individual emails instead).
 4. Save. Free for up to 50 users.
@@ -114,24 +112,42 @@ sign in with a matching email first.
 
 ## Making changes from here on
 
-Just ask Claude, in a Claude Code session opened in this folder (or point it
+Just ask Claude, in a Claude Code session opened in this folder (or pointed
 at `~/Downloads/leapfrog-campaign-app`), to make the change. Claude edits
 the files, commits, and runs `git push` — Cloudflare picks up the push
 automatically and redeploys within seconds. You never need to touch
 Wrangler, Node, or the Cloudflare dashboard again for ordinary changes.
 
-The dashboard is still where you'd go for infra-level things — checking
-D1 data directly, changing the Access policy, adding a custom domain — but
-day-to-day feature/styling changes are just "ask Claude, then check the
-live site."
+The dashboard is still where you'd go for infra-level things — checking D1
+data directly, changing the Access policy, adding a custom domain — but
+day-to-day feature/styling changes are just "ask Claude, then check the live
+site."
+
+---
+
+## Project layout
+
+- `public/` — the static front-end (HTML/CSS/JS, fonts, logo). Served
+  directly by Cloudflare's asset handler for any request that isn't under
+  `/api/`.
+- `worker/index.js` — the one Worker script handling all `/api/campaigns...`
+  routes (list, create, update, archive/restore, bulk import), falling back
+  to static assets for everything else.
+- `worker/utils.js` — small shared helpers used by `worker/index.js`.
+- `schema.sql` / `seed.sql` — D1 table definition and your migrated
+  historical campaign data; run once via the D1 dashboard console.
+- `wrangler.toml` — the actual config Cloudflare reads on every deploy:
+  Worker entry point, static assets directory, and the D1 binding. This is
+  the one file where infra config lives — edit it (and push) rather than
+  trying to change bindings from the dashboard.
 
 ---
 
 ## What changed from the artifact version
 
 - Data lives in a real database (Cloudflare D1) instead of each browser's
-  localStorage. Every add/edit/delete/archive/restore/import calls a small
-  API (`functions/api/campaigns/...`).
+  localStorage. Every add/edit/delete/archive/restore/import calls the small
+  API in `worker/index.js`.
 - The board polls the API every 20 seconds (only while the tab is visible
   and no modal is open) so teammates' changes show up without a manual
   reload.
@@ -140,6 +156,8 @@ live site."
 - "Export backup" uses a normal browser download instead of the Claude
   Artifact download API, since this is a plain static site now.
 - The Analytics page (inventory-over-time charts) is unchanged.
-- `wrangler.toml` is still in the repo for reference (e.g. if you ever want
-  to inspect D1 from the CLI later), but nothing in this deploy path
-  requires Wrangler, Node, or npm.
+- The API was originally written as Cloudflare Pages Functions
+  (`functions/api/...`, one file per route) but this project turned out to
+  be Cloudflare's unified "Worker with static assets" type rather than
+  classic Pages, which doesn't use that file-based convention — it's been
+  consolidated into `worker/index.js` instead, with identical behavior.

@@ -1,8 +1,12 @@
 name = "leapfrog-campaign-board"
 compatibility_date = "2025-01-01"
-pages_build_output_dir = "public"
+main = "worker/index.js"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "leapfrog_campaigns"
-database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
+database_id = "REPLACE_WITH_ID_FROM_D1_DASHBOARD"
