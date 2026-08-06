@@ -480,6 +480,40 @@
   }
   .chart-tooltip.show { opacity: 1; }
   .chart-tooltip .tt-value { font-weight: 700; margin-top: 1px; }
+
+  /* ---------- Weekly occupancy report ---------- */
+  .report-card { margin-top: 4px; }
+  .report-tabs.tabs { padding: 3px; gap: 4px; }
+  .report-tabs .tab-btn { padding: 7px 16px; font-size: 12.5px; }
+  .report-range-row { margin: 2px 0 14px; }
+  .report-table-wrap {
+    max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-m);
+  }
+  .report-row {
+    --rep-c: var(--live);
+    display: flex; align-items: center; gap: 14px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .report-row:last-child { border-bottom: none; }
+  .report-row[data-current="true"] { background: color-mix(in srgb, var(--purple) 6%, var(--surface)); }
+  .report-week {
+    flex: none; width: 160px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .report-current-badge {
+    font-family: var(--font-head); font-weight: 700; font-size: 9.5px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--purple-2); margin-left: 6px;
+  }
+  .report-bar-track {
+    flex: 1; height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .report-bar-fill { height: 100%; border-radius: 999px; background: var(--rep-c); }
+  .report-pct {
+    flex: none; width: 46px; text-align: right; font-family: var(--font-head); font-weight: 700;
+    font-size: 13px; font-variant-numeric: tabular-nums; color: var(--rep-c);
+  }
+  .report-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -609,6 +643,27 @@
           <div class="chart-tooltip" id="chart-tooltip-Swansea" role="status" aria-live="polite"></div>
         </div>
         <p class="chart-flag" id="chart-flag-Swansea"></p>
+      </div>
+    </div>
+
+    <div class="chart-card report-card">
+      <div class="chart-card-head">
+        <h2>Weekly Occupancy</h2>
+        <div class="tabs report-tabs" id="report-tabs" role="tablist" aria-label="Venue">
+          <button class="tab-btn" role="tab" data-loc="WMC" aria-selected="true">WMC</button>
+          <button class="tab-btn" role="tab" data-loc="Swansea" aria-selected="false">Swansea</button>
+        </div>
+      </div>
+      <div class="range-row report-range-row">
+        <span class="range-label">Window</span>
+        <div class="chip-group" id="report-range-group" role="group" aria-label="Report date range">
+          <button type="button" class="chip range-chip" data-range="3m" aria-pressed="true">Last 3 months</button>
+          <button type="button" class="chip range-chip" data-range="6m" aria-pressed="false">Last 6 months</button>
+          <button type="button" class="chip range-chip" data-range="12m" aria-pressed="false">Last 12 months</button>
+        </div>
+      </div>
+      <div class="report-table-wrap">
+        <div class="report-table" id="report-rows"></div>
       </div>
     </div>
   </div>
@@ -827,6 +882,8 @@
     viewBoard: document.getElementById('view-board'),
     viewAnalytics: document.getElementById('view-analytics'),
     rangeGroup: document.getElementById('range-group'),
+    reportTabs: document.getElementById('report-tabs'),
+    reportRangeGroup: document.getElementById('report-range-group'),
   };
 
   const CAPACITY = { WMC: 9, Swansea: 18 };
@@ -1253,6 +1310,7 @@
   function updateAnalytics() {
     const { start, end } = getAnalyticsWindow();
     ANALYTICS_LOCS.forEach(loc => renderChart(loc, start, end));
+    renderWeeklyReport();
     analyticsRendered = true;
   }
 
@@ -1272,6 +1330,121 @@
     analyticsRangeKey = btn.dataset.range;
     [...els.rangeGroup.children].forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
     updateAnalytics();
+  });
+
+  /* ---------- Weekly occupancy report ---------- */
+  // A running, week-by-week utilization log — separate from the forward-looking
+  // charts above, this looks backward from today so it reads as "every week
+  // that's gone by so far," growing on its own as time passes.
+  let reportLoc = 'WMC';
+  let reportRangeKey = '3m';
+
+  function startOfWeek(d) {
+    const r = new Date(d);
+    const day = r.getDay(); // 0 (Sun) .. 6 (Sat)
+    const diff = (day === 0 ? -6 : 1) - day; // shift back to Monday
+    r.setDate(r.getDate() + diff);
+    r.setHours(0, 0, 0, 0);
+    return r;
+  }
+
+  function getReportWindow() {
+    const days = RANGE_DAYS[reportRangeKey];
+    return { start: addDays(todayMidnight(), -days), end: todayMidnight() };
+  }
+
+  // Occupancy % per calendar week (Mon–Sun) in [startDate, endDate]: average
+  // daily booked slots across the week's days, divided by capacity. Partial
+  // weeks at the range edges are averaged over however many days actually
+  // fall in range, not always 7, so they aren't skewed low.
+  function computeWeeklyOccupancy(loc, startDate, endDate) {
+    const capacity = CAPACITY[loc] || 0;
+    const series = computeSeriesForLoc(loc, startDate, endDate);
+    const weeks = new Map();
+    series.forEach(point => {
+      const ws = startOfWeek(point.date);
+      const key = isoDate(ws);
+      if (!weeks.has(key)) weeks.set(key, { start: ws, sum: 0, count: 0 });
+      const w = weeks.get(key);
+      w.sum += point.v;
+      w.count += 1;
+    });
+    const thisWeekKey = isoDate(startOfWeek(todayMidnight()));
+    return [...weeks.values()]
+      .map(w => ({
+        start: w.start,
+        end: addDays(w.start, 6),
+        pct: capacity ? Math.round((w.sum / (w.count * capacity)) * 100) : 0,
+        isCurrent: isoDate(w.start) === thisWeekKey,
+      }))
+      .sort((a, b) => b.start - a.start);
+  }
+
+  function renderWeeklyReport() {
+    const { start, end } = getReportWindow();
+    const weeks = computeWeeklyOccupancy(reportLoc, start, end);
+    const container = document.getElementById('report-rows');
+    container.innerHTML = '';
+
+    if (!weeks.length) {
+      const empty = document.createElement('div');
+      empty.className = 'report-empty';
+      empty.textContent = 'No data in this window.';
+      container.appendChild(empty);
+      return;
+    }
+
+    weeks.forEach(w => {
+      const row = document.createElement('div');
+      row.className = 'report-row';
+      if (w.isCurrent) row.dataset.current = 'true';
+      let color = 'var(--live)';
+      if (w.pct >= 100) color = 'var(--st-red)';
+      else if (w.pct >= 75) color = 'var(--st-orange)';
+      row.style.setProperty('--rep-c', color);
+
+      const weekLabel = document.createElement('span');
+      weekLabel.className = 'report-week';
+      weekLabel.textContent = `${fmtDate(w.start, false)} – ${fmtDate(w.end, false)}`;
+      if (w.isCurrent) {
+        const badge = document.createElement('span');
+        badge.className = 'report-current-badge';
+        badge.textContent = 'This week';
+        weekLabel.appendChild(badge);
+      }
+
+      const track = document.createElement('div');
+      track.className = 'report-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'report-bar-fill';
+      fill.style.width = Math.min(100, Math.max(0, w.pct)) + '%';
+      track.appendChild(fill);
+
+      const pctEl = document.createElement('span');
+      pctEl.className = 'report-pct';
+      pctEl.textContent = `${w.pct}%`;
+
+      row.appendChild(weekLabel);
+      row.appendChild(track);
+      row.appendChild(pctEl);
+      container.appendChild(row);
+    });
+  }
+
+  els.reportTabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    reportLoc = btn.dataset.loc;
+    [...els.reportTabs.children].forEach(b => b.setAttribute('aria-selected', String(b === btn)));
+    renderWeeklyReport();
+  });
+
+  els.reportRangeGroup.addEventListener('click', (e) => {
+    const btn = e.target.closest('.range-chip');
+    if (!btn) return;
+    reportRangeKey = btn.dataset.range;
+    [...els.reportRangeGroup.children].forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    renderWeeklyReport();
   });
 
   // "Heads up" digest: always anchored to real today, independent of the
