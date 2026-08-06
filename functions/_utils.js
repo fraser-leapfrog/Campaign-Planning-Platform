@@ -1,0 +1,35 @@
+// Shared helpers for the Pages Functions API routes.
+// Files starting with "_" are not routable — Cloudflare excludes them from URL matching,
+// which is exactly what we want for a shared module.
+
+export function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+// Cloudflare Access sits in front of the whole zone (see README), so every request
+// reaching a Function should already carry this header. Checking it here too is
+// defense-in-depth in case Access is ever misconfigured for a sub-path.
+export function requireAccess(request) {
+  const email = request.headers.get("Cf-Access-Authenticated-User-Email");
+  if (!email) return null;
+  return email;
+}
+
+export function rowToJson(row) {
+  return {
+    id: row.id,
+    n: row.n,
+    s: row.s,
+    loc: row.loc ? JSON.parse(row.loc) : [],
+    deal: row.deal,
+    rt: row.rt,
+    start: row.start,
+    end: row.end,
+    notes: row.notes,
+    rotation: row.rotation,
+    deleted: !!row.deleted,
+  };
+}
