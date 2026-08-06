@@ -9,4 +9,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "leapfrog_campaigns"
-database_id = "REPLACE_WITH_ID_FROM_D1_DASHBOARD"
+database_id = "7eafecaa-e354-4182-a438-b3327006c591"
