@@ -89,9 +89,16 @@ macOS will offer to remember it in Keychain — say yes, so future pushes
    `wrangler.toml`, not in the dashboard's Bindings screen** (that screen
    won't let changes stick, by design — code is the source of truth here).
 3. Back on the database → **Console** tab: paste the contents of
-   `schema.sql` (in this folder) into the query box and run it.
-4. Paste the contents of `seed.sql` and run it — loads your 94 existing
-   campaigns in one go.
+   **`schema.console.sql`** (not `schema.sql`) into the query box and run
+   it. Use the `.console.sql` versions specifically — the dashboard console
+   has pasted multi-line SQL as a single squashed line in practice, and
+   since `schema.sql`/`seed.sql` use `--` line comments, a squashed paste
+   turns the very first comment into one giant comment swallowing the
+   entire rest of the file (D1 then reports "no query"). The `.console.sql`
+   files are the same SQL with comments stripped, so that failure mode
+   can't happen regardless of how the console handles line breaks.
+4. Paste the contents of **`seed.console.sql`** and run it — loads your 94
+   existing campaigns in one go.
 5. Push the `wrangler.toml` change from step 2 (if not already done) —
    Cloudflare redeploys automatically and picks up the binding.
 
