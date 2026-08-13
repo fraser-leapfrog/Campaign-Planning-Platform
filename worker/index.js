@@ -24,6 +24,29 @@ export default {
       return handlePatch(request, env, decodeURIComponent(idMatch[1]));
     }
 
+    // Marketing Planner — completely separate data from the WMC/Swansea campaigns
+    // above (its own tables: marketing_ideas, marketing_calendar).
+    if (pathname === "/api/ideas") {
+      if (request.method === "GET") return handleIdeasList(request, env);
+      if (request.method === "POST") return handleIdeaCreate(request, env);
+    }
+    const ideaIdMatch = pathname.match(/^\/api\/ideas\/([^/]+)$/);
+    if (ideaIdMatch && request.method === "DELETE") {
+      return handleIdeaDelete(request, env, decodeURIComponent(ideaIdMatch[1]));
+    }
+
+    if (pathname === "/api/marketing-calendar") {
+      if (request.method === "GET") return handleMarketingList(request, env);
+      if (request.method === "POST") return handleMarketingCreate(request, env);
+    }
+    const mcIdMatch = pathname.match(/^\/api\/marketing-calendar\/([^/]+)$/);
+    if (mcIdMatch && request.method === "PATCH") {
+      return handleMarketingPatch(request, env, decodeURIComponent(mcIdMatch[1]));
+    }
+    if (mcIdMatch && request.method === "DELETE") {
+      return handleMarketingDelete(request, env, decodeURIComponent(mcIdMatch[1]));
+    }
+
     if (pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
 
     // Anything that isn't an API route is a static asset (index.html, fonts, logo).
@@ -149,4 +172,111 @@ async function handleReplaceAll(request, env) {
 
   await env.DB.batch(stmts);
   return json({ ok: true, count: stmts.length - 1 });
+}
+
+/* ---------- Marketing Planner (separate from the campaigns above) ---------- */
+
+async function handleIdeasList(request, env) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, text, created_at FROM marketing_ideas ORDER BY created_at DESC`
+  ).all();
+  return json(results);
+}
+
+async function handleIdeaCreate(request, env) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const body = await request.json();
+  if (!body || typeof body.text !== "string" || !body.text.trim()) {
+    return json({ error: "idea text is required" }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`INSERT INTO marketing_ideas (id, text) VALUES (?1, ?2)`)
+    .bind(id, body.text.trim())
+    .run();
+
+  return json({ id }, 201);
+}
+
+async function handleIdeaDelete(request, env, id) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const result = await env.DB.prepare(`DELETE FROM marketing_ideas WHERE id = ?`).bind(id).run();
+  if (!result.meta.changes) return json({ error: "not found" }, 404);
+  return json({ ok: true });
+}
+
+async function handleMarketingList(request, env) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, name, date, end_date, type, status, notes
+     FROM marketing_calendar
+     ORDER BY date`
+  ).all();
+  return json(results);
+}
+
+async function handleMarketingCreate(request, env) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const body = await request.json();
+  if (!body || typeof body.name !== "string" || !body.name.trim()) {
+    return json({ error: "campaign name is required" }, 400);
+  }
+  if (!body.date) return json({ error: "date is required" }, 400);
+
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO marketing_calendar (id, name, date, end_date, type, status, notes)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+  )
+    .bind(id, body.name.trim(), body.date, body.end_date || null, body.type || null, body.status || null, body.notes || null)
+    .run();
+
+  return json({ id }, 201);
+}
+
+async function handleMarketingPatch(request, env, id) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const body = await request.json();
+  const colByField = { name: "name", date: "date", end_date: "end_date", type: "type", status: "status", notes: "notes" };
+
+  const sets = [];
+  const values = [];
+  for (const [field, col] of Object.entries(colByField)) {
+    if (!(field in body)) continue;
+    sets.push(`${col} = ?`);
+    values.push(body[field]);
+  }
+  if (!sets.length) return json({ error: "no fields to update" }, 400);
+
+  sets.push("updated_at = datetime('now')");
+  values.push(id);
+
+  const result = await env.DB.prepare(`UPDATE marketing_calendar SET ${sets.join(", ")} WHERE id = ?`)
+    .bind(...values)
+    .run();
+
+  if (!result.meta.changes) return json({ error: "not found" }, 404);
+  return json({ ok: true });
+}
+
+async function handleMarketingDelete(request, env, id) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const result = await env.DB.prepare(`DELETE FROM marketing_calendar WHERE id = ?`).bind(id).run();
+  if (!result.meta.changes) return json({ error: "not found" }, 404);
+  return json({ ok: true });
 }
