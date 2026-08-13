@@ -495,7 +495,10 @@
   .idea-form input { flex: 1; }
   /* One tidy row per idea (not wrapped chips) — click a row to open it and add
      notes/detail; the title + a one-line notes preview keep the list scannable. */
-  .idea-list { display: flex; flex-direction: column; gap: 8px; }
+  /* Caps at roughly 5 rows tall (more if they're all short, fewer if notes make
+     them tall) then scrolls, so a long-running idea list doesn't push the
+     calendar further down the page every time you add one. */
+  .idea-list { display: flex; flex-direction: column; gap: 8px; max-height: 344px; overflow-y: auto; padding-right: 4px; }
   .idea-row {
     display: flex; align-items: flex-start; gap: 12px; background: var(--surface-2);
     border: 1px solid var(--line); border-left: 3px solid var(--pink); border-radius: var(--radius-m);
