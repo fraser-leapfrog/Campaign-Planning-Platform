@@ -472,6 +472,13 @@
   .inv-chart { width: 100%; height: auto; aspect-ratio: 640 / 220; display: block; overflow: visible; }
   .inv-chart text { font-family: var(--font-body); }
   .chart-flag { margin: 8px 0 0; font-size: 12px; color: var(--st-red); font-weight: 500; min-height: 1px; }
+
+  /* Confirmed vs Hold-with-dates legend, shared across both charts */
+  .chart-legend { display: flex; align-items: center; gap: 16px; margin: -4px 0 14px; flex-wrap: wrap; }
+  .chart-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .chart-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .chart-legend-swatch[data-kind="confirmed"] { background: var(--purple); }
+  .chart-legend-swatch[data-kind="hold"] { background: var(--st-orange); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.55) 0 2px, transparent 2px 4px); }
   .chart-tooltip {
     position: absolute; left: 0; top: 0; opacity: 0; transform: translate(-50%, calc(-100% - 12px));
     background: var(--text); color: var(--bg); font-size: 12px; line-height: 1.4; font-weight: 500;
@@ -480,6 +487,7 @@
   }
   .chart-tooltip.show { opacity: 1; }
   .chart-tooltip .tt-value { font-weight: 700; margin-top: 1px; }
+  .chart-tooltip .tt-hold { font-weight: 500; margin-top: 1px; color: var(--st-orange); }
 
   /* ---------- Weekly occupancy report ---------- */
   .report-card { margin-top: 4px; }
@@ -619,6 +627,11 @@
         <button type="button" class="chip range-chip" data-range="6m" aria-pressed="true">6 months</button>
         <button type="button" class="chip range-chip" data-range="12m" aria-pressed="false">12 months</button>
       </div>
+    </div>
+
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-legend-swatch" data-kind="confirmed"></span>Confirmed</span>
+      <span class="chart-legend-item"><span class="chart-legend-swatch" data-kind="hold"></span>Hold with dates (unconfirmed)</span>
     </div>
 
     <div class="analytics-grid">
@@ -1166,7 +1179,10 @@
 
   // Daily booked-slot series for one venue across [startDate, endDate], inclusive.
   // Mirrors renderInventory()'s live-bucket logic exactly, just evaluated per day
-  // instead of against the single "check what's live" range.
+  // instead of against the single "check what's live" range. Split into `confirmed`
+  // (any status other than "To Hold") and `hold` ("To Hold" campaigns that already
+  // have dates set — provisional bookings) so callers can show them differently;
+  // `v` is the combined total, same figure the chart used before the split.
   function computeSeriesForLoc(loc, startDate, endDate) {
     const rows = getAllRows().filter(r => r.loc.includes(loc));
     const groups = groupRows(rows);
@@ -1174,15 +1190,16 @@
     const series = [];
     for (let i = 0; i <= totalDays; i++) {
       const day = addDays(startDate, i);
-      let weight = 0;
+      let confirmed = 0, hold = 0;
       groups.forEach(g => {
         const gs = parseDate(g.start), ge = parseDate(g.end);
         if (!gs && !ge) return; // unscheduled — excluded from inventory, same as the board
         if (ge && ge < day) return; // already ended
         if (gs && gs > day) return; // not started yet
-        weight += inventoryWeight(g);
+        if (g.s === 'To Hold') hold += inventoryWeight(g);
+        else confirmed += inventoryWeight(g);
       });
-      series.push({ date: day, v: weight });
+      series.push({ date: day, confirmed, hold, v: confirmed + hold });
     }
     return series;
   }
@@ -1199,9 +1216,17 @@
     const xAt = i => ML + (totalDays ? plotW * i / totalDays : 0);
     const yAt = v => MT + plotH - (plotH * v / yMax);
 
-    const linePts = series.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.v).toFixed(1)}`).join(' L ');
-    const lineD = `M ${linePts}`;
-    const areaD = `M ${xAt(0).toFixed(1)},${yAt(0).toFixed(1)} L ${linePts} L ${xAt(totalDays).toFixed(1)},${yAt(0).toFixed(1)} Z`;
+    // Confirmed line/area (bottom layer) and total line (confirmed + hold, top edge
+    // of the stacked hold band) — "hold with dates" campaigns render as a second,
+    // differently-coloured layer stacked on top so provisional bookings are visible
+    // but visually distinct from confirmed occupancy.
+    const confPts = series.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.confirmed).toFixed(1)}`);
+    const totPts = series.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.v).toFixed(1)}`);
+    const lineD = `M ${confPts.join(' L ')}`;
+    const totalLineD = `M ${totPts.join(' L ')}`;
+    const areaD = `M ${xAt(0).toFixed(1)},${yAt(0).toFixed(1)} L ${confPts.join(' L ')} L ${xAt(totalDays).toFixed(1)},${yAt(0).toFixed(1)} Z`;
+    const hasHold = series.some(p => p.hold > 0);
+    const holdAreaD = `M ${confPts.join(' L ')} L ${totPts.slice().reverse().join(' L ')} Z`;
 
     const todayIdx = daysBetween(startDate, todayMidnight());
     const hasToday = todayIdx >= 0 && todayIdx <= totalDays;
@@ -1229,17 +1254,28 @@
       svg += `<line x1="${xAt(todayIdx).toFixed(1)}" y1="${MT}" x2="${xAt(todayIdx).toFixed(1)}" y2="${MT + plotH}" stroke="var(--text-muted)" stroke-width="1" opacity="0.35" />`;
       svg += `<text x="${xAt(todayIdx).toFixed(1)}" y="${MT - 4}" text-anchor="middle" font-size="9" fill="var(--text-muted)">Today</text>`;
     }
-    // Area + line
+    // Area + line (confirmed, bottom layer)
     svg += `<path d="${areaD}" fill="var(--purple)" fill-opacity="0.1" stroke="none" />`;
     svg += `<path d="${lineD}" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
-    // Today end-marker + direct label
+    // Hold-with-dates band, stacked on top of confirmed — dashed top edge so it
+    // reads as provisional rather than booked.
+    if (hasHold) {
+      svg += `<path d="${holdAreaD}" fill="var(--st-orange)" fill-opacity="0.28" stroke="none" />`;
+      svg += `<path d="${totalLineD}" fill="none" stroke="var(--st-orange)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" />`;
+    }
+    // Today end-marker + direct label — sits at the total (confirmed + hold) height,
+    // coloured orange when today includes any hold-with-dates slots.
     if (hasToday) {
-      const tv = series[todayIdx].v;
+      const todayPoint = series[todayIdx];
+      const tv = todayPoint.v;
+      const todayHasHold = todayPoint.hold > 0;
+      const markerColor = todayHasHold ? 'var(--st-orange)' : 'var(--purple)';
       const cx = xAt(todayIdx), cy = yAt(tv);
       svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6.5" fill="var(--surface)" />`;
-      svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="var(--purple)" />`;
+      svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="${markerColor}" />`;
       const labelY = cy < MT + 16 ? cy + 16 : cy - 10;
-      svg += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)">${tv}/${capacity}</text>`;
+      const label = todayHasHold ? `${tv}/${capacity} (${todayPoint.hold} on hold)` : `${tv}/${capacity}`;
+      svg += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)">${label}</text>`;
     }
     // Hover crosshair (hidden until pointer moves) + hit area
     svg += `<g id="crosshair-${loc}" opacity="0">
@@ -1254,9 +1290,12 @@
 
     const todayEl = document.getElementById(`chart-today-${loc}`);
     if (hasToday) {
-      const tv = series[todayIdx].v;
+      const todayPoint = series[todayIdx];
+      const tv = todayPoint.v;
       const pct = capacity ? Math.round((tv / capacity) * 100) : 0;
-      todayEl.textContent = `Today · ${tv}/${capacity} slots · ${pct}%`;
+      todayEl.textContent = todayPoint.hold > 0
+        ? `Today · ${tv}/${capacity} slots · ${pct}% (${todayPoint.hold} on hold)`
+        : `Today · ${tv}/${capacity} slots · ${pct}%`;
     } else {
       todayEl.textContent = '';
     }
@@ -1286,6 +1325,7 @@
       chLine.setAttribute('x1', px.toFixed(1)); chLine.setAttribute('x2', px.toFixed(1));
       chRing.setAttribute('cx', px.toFixed(1)); chRing.setAttribute('cy', py.toFixed(1));
       chDot.setAttribute('cx', px.toFixed(1)); chDot.setAttribute('cy', py.toFixed(1));
+      chDot.setAttribute('fill', point.hold > 0 ? 'var(--st-orange)' : 'var(--purple)');
       tooltip.innerHTML = '';
       const dateLine = document.createElement('div');
       dateLine.textContent = fmtDate(point.date, true);
@@ -1294,6 +1334,12 @@
       valueLine.textContent = `${point.v} / ${capacity} slots`;
       tooltip.appendChild(dateLine);
       tooltip.appendChild(valueLine);
+      if (point.hold > 0) {
+        const holdLine = document.createElement('div');
+        holdLine.className = 'tt-hold';
+        holdLine.textContent = `incl. ${point.hold} on hold (unconfirmed)`;
+        tooltip.appendChild(holdLine);
+      }
       tooltip.style.left = (px / W * 100) + '%';
       tooltip.style.top = (py / H * 100) + '%';
       tooltip.classList.add('show');
