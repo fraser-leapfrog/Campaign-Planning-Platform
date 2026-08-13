@@ -31,6 +31,9 @@ export default {
       if (request.method === "POST") return handleIdeaCreate(request, env);
     }
     const ideaIdMatch = pathname.match(/^\/api\/ideas\/([^/]+)$/);
+    if (ideaIdMatch && request.method === "PATCH") {
+      return handleIdeaPatch(request, env, decodeURIComponent(ideaIdMatch[1]));
+    }
     if (ideaIdMatch && request.method === "DELETE") {
       return handleIdeaDelete(request, env, decodeURIComponent(ideaIdMatch[1]));
     }
@@ -181,7 +184,9 @@ async function handleIdeasList(request, env) {
   if (!email) return json({ error: "unauthorized" }, 401);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, text, created_at FROM marketing_ideas ORDER BY created_at DESC`
+    `SELECT id, text, notes, created_at, updated_at
+     FROM marketing_ideas
+     ORDER BY COALESCE(updated_at, created_at) DESC`
   ).all();
   return json(results);
 }
@@ -201,6 +206,33 @@ async function handleIdeaCreate(request, env) {
     .run();
 
   return json({ id }, 201);
+}
+
+async function handleIdeaPatch(request, env, id) {
+  const email = requireAccess(request);
+  if (!email) return json({ error: "unauthorized" }, 401);
+
+  const body = await request.json();
+  const colByField = { text: "text", notes: "notes" };
+
+  const sets = [];
+  const values = [];
+  for (const [field, col] of Object.entries(colByField)) {
+    if (!(field in body)) continue;
+    sets.push(`${col} = ?`);
+    values.push(body[field]);
+  }
+  if (!sets.length) return json({ error: "no fields to update" }, 400);
+
+  sets.push("updated_at = datetime('now')");
+  values.push(id);
+
+  const result = await env.DB.prepare(`UPDATE marketing_ideas SET ${sets.join(", ")} WHERE id = ?`)
+    .bind(...values)
+    .run();
+
+  if (!result.meta.changes) return json({ error: "not found" }, 404);
+  return json({ ok: true });
 }
 
 async function handleIdeaDelete(request, env, id) {

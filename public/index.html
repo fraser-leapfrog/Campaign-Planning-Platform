@@ -493,18 +493,22 @@
   .idea-board-card { margin-bottom: 20px; }
   .idea-form { display: flex; gap: 10px; margin-bottom: 16px; }
   .idea-form input { flex: 1; }
-  .idea-list { display: flex; flex-wrap: wrap; gap: 10px; }
-  .idea-card {
-    position: relative; max-width: 260px; background: var(--surface-2); border: 1px solid var(--line);
-    border-left: 3px solid var(--pink); border-radius: var(--radius-m); padding: 10px 30px 10px 12px;
-    font-size: 13px; line-height: 1.4;
+  /* One tidy row per idea (not wrapped chips) — click a row to open it and add
+     notes/detail; the title + a one-line notes preview keep the list scannable. */
+  .idea-list { display: flex; flex-direction: column; gap: 8px; }
+  .idea-row {
+    display: flex; align-items: flex-start; gap: 12px; background: var(--surface-2);
+    border: 1px solid var(--line); border-left: 3px solid var(--pink); border-radius: var(--radius-m);
+    padding: 12px 14px; cursor: pointer;
   }
-  .idea-delete {
-    position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
-    border: none; background: transparent; color: var(--text-muted); cursor: pointer;
-    display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1;
+  .idea-row:hover { border-color: var(--purple-2); }
+  .idea-row-main { flex: 1; min-width: 0; }
+  .idea-row-text { font-size: 13.5px; font-weight: 500; }
+  .idea-row-notes {
+    margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line);
+    font-size: 12px; color: var(--text-muted); white-space: pre-wrap;
   }
-  .idea-delete:hover { color: var(--st-red); }
+  .idea-row-actions { flex: none; display: flex; gap: 6px; }
   .idea-empty, .calendar-empty { font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
 
   .calendar-head { align-items: center; }
@@ -524,6 +528,11 @@
   .calendar-day {
     background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-s);
     padding: 6px 6px 8px; min-height: 78px; cursor: pointer;
+    /* Grid items default to min-width: auto, so a long unbreakable entry title
+       (nowrap + ellipsis) still contributes its full text width to the column's
+       automatic minimum size and blows the "equal 1fr columns" layout apart.
+       min-width: 0 opts this item out of that, letting the ellipsis actually work. */
+    min-width: 0; overflow: hidden;
   }
   .calendar-day:hover { border-color: var(--purple-2); }
   .calendar-day[data-outside="true"] { opacity: .38; }
@@ -551,6 +560,12 @@
   .report-card { margin-top: 4px; }
   .report-tabs.tabs { padding: 3px; gap: 4px; }
   .report-tabs .tab-btn { padding: 7px 16px; font-size: 12.5px; }
+
+  /* Board / Analytics — a second-level switcher inside the Campaign Board tab
+     (Analytics is just another view of the same campaign data, so it nests here
+     rather than sitting as a top-level tab next to the unrelated Marketing Planner). */
+  .sub-tabs.tabs { padding: 3px; gap: 4px; margin: 4px 0 26px; }
+  .sub-tabs .tab-btn { padding: 8px 18px; font-size: 12.5px; }
   .report-range-row { margin: 2px 0 14px; }
   .report-table-wrap {
     max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-m);
@@ -592,9 +607,14 @@
 
 <main>
   <div class="tabs page-nav" id="page-tabs" role="tablist" aria-label="Page">
-    <button class="tab-btn" role="tab" data-page="board" aria-selected="true">Campaign Board</button>
-    <button class="tab-btn" role="tab" data-page="analytics" aria-selected="false">Analytics</button>
+    <button class="tab-btn" role="tab" data-page="campaign" aria-selected="true">Campaign Board</button>
     <button class="tab-btn" role="tab" data-page="marketing" aria-selected="false">Marketing Planner</button>
+  </div>
+
+  <div id="view-campaign">
+  <div class="tabs sub-tabs" id="campaign-subtabs" role="tablist" aria-label="Campaign Board section">
+    <button class="tab-btn" role="tab" data-subpage="board" aria-selected="true">Board</button>
+    <button class="tab-btn" role="tab" data-subpage="analytics" aria-selected="false">Analytics</button>
   </div>
 
   <div id="view-board">
@@ -738,6 +758,7 @@
         <div class="report-table" id="report-rows"></div>
       </div>
     </div>
+  </div>
   </div>
 
   <div id="view-marketing" hidden>
@@ -954,6 +975,34 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="idea-modal-backdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="idea-modal-title">
+    <div class="modal-head">
+      <h2 id="idea-modal-title">Edit idea</h2>
+      <button class="modal-close" id="idea-modal-close" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="idea-edit-form">
+      <div class="field">
+        <label class="field-label" for="idea-f-text">Idea <span class="required-mark">*</span></label>
+        <input type="text" id="idea-f-text" maxlength="300" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="idea-f-notes">Notes</label>
+        <textarea id="idea-f-notes" rows="6" placeholder="Build on this idea — angle, references, next steps…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="idea-modal-delete">Delete</button>
+        <div style="display:flex; gap:10px; margin-left:auto;">
+          <button type="button" class="btn btn-ghost" id="idea-modal-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1005,7 +1054,7 @@
     await refreshRows();
     render();
     updateTabCounts();
-    if (!els.viewAnalytics.hidden) updateAnalytics();
+    if (!els.viewCampaign.hidden && !els.viewAnalytics.hidden) updateAnalytics();
   }
 
   function todayMidnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
@@ -1053,6 +1102,8 @@
     statusGroup: document.getElementById('status-group'),
     rotationGroup: document.getElementById('rotation-group'),
     pageTabs: document.getElementById('page-tabs'),
+    viewCampaign: document.getElementById('view-campaign'),
+    campaignSubtabs: document.getElementById('campaign-subtabs'),
     viewBoard: document.getElementById('view-board'),
     viewAnalytics: document.getElementById('view-analytics'),
     rangeGroup: document.getElementById('range-group'),
@@ -1079,6 +1130,13 @@
     mktFType: document.getElementById('mkt-f-type'),
     mktFStatus: document.getElementById('mkt-f-status'),
     mktFNotes: document.getElementById('mkt-f-notes'),
+    ideaModalBackdrop: document.getElementById('idea-modal-backdrop'),
+    ideaModalClose: document.getElementById('idea-modal-close'),
+    ideaModalCancel: document.getElementById('idea-modal-cancel'),
+    ideaModalDelete: document.getElementById('idea-modal-delete'),
+    ideaEditForm: document.getElementById('idea-edit-form'),
+    ideaFText: document.getElementById('idea-f-text'),
+    ideaFNotes: document.getElementById('idea-f-notes'),
   };
 
   const CAPACITY = { WMC: 9, Swansea: 18 };
@@ -1547,11 +1605,23 @@
     if (!btn) return;
     const view = btn.dataset.page;
     [...els.pageTabs.children].forEach(b => b.setAttribute('aria-selected', String(b === btn)));
-    els.viewBoard.hidden = view !== 'board';
-    els.viewAnalytics.hidden = view !== 'analytics';
+    els.viewCampaign.hidden = view !== 'campaign';
     els.viewMarketing.hidden = view !== 'marketing';
-    if (view === 'analytics') updateAnalytics();
+    // Re-render whichever Campaign Board sub-view (Board/Analytics) is currently selected.
+    if (view === 'campaign' && !els.viewAnalytics.hidden) updateAnalytics();
     if (view === 'marketing') updateMarketing();
+  });
+
+  // Board / Analytics — nested inside the Campaign Board tab, since both look at
+  // the same WMC/Swansea data (unlike Marketing Planner, which is unrelated).
+  els.campaignSubtabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    const sub = btn.dataset.subpage;
+    [...els.campaignSubtabs.children].forEach(b => b.setAttribute('aria-selected', String(b === btn)));
+    els.viewBoard.hidden = sub !== 'board';
+    els.viewAnalytics.hidden = sub !== 'analytics';
+    if (sub === 'analytics') updateAnalytics();
   });
 
   els.rangeGroup.addEventListener('click', (e) => {
@@ -1912,6 +1982,7 @@
     if (els.modalBackdrop.classList.contains('open')) closeModal();
     if (els.archiveBackdrop.classList.contains('open')) closeArchive();
     if (els.mktModalBackdrop.classList.contains('open')) closeMktModal();
+    if (els.ideaModalBackdrop.classList.contains('open')) closeIdeaModal();
   });
 
   els.locationGroup.addEventListener('click', (e) => {
@@ -2104,6 +2175,7 @@
   let MKT_ROWS = [];
   let calendarMonth = (() => { const t = todayMidnight(); return new Date(t.getFullYear(), t.getMonth(), 1); })();
   let editingMktId = null; // null = add mode; string = editing that row
+  let editingIdeaId = null;
 
   async function refreshMarketing() {
     const [ideas, mkt] = await Promise.all([
@@ -2116,6 +2188,11 @@
   function createIdea(text) {
     return apiRequest('/api/ideas', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }),
+    });
+  }
+  function patchIdea(id, fields) {
+    return apiRequest(`/api/ideas/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(fields),
     });
   }
   function deleteIdea(id) {
@@ -2146,6 +2223,9 @@
     renderCalendar();
   }
 
+  // Rows, not wrapped chips — reads as a tidy running list, newest-worked-on first
+  // (COALESCE(updated_at, created_at) DESC on the server), so ideas you're actively
+  // building on stay near the top instead of getting buried.
   function renderIdeas() {
     els.ideaList.innerHTML = '';
     if (!IDEAS.length) {
@@ -2156,24 +2236,50 @@
       return;
     }
     IDEAS.forEach(idea => {
-      const card = document.createElement('div');
-      card.className = 'idea-card';
-      const text = document.createElement('span');
+      const row = document.createElement('div');
+      row.className = 'idea-row';
+      row.addEventListener('click', () => openIdeaModal(idea));
+
+      const main = document.createElement('div');
+      main.className = 'idea-row-main';
+      const text = document.createElement('div');
+      text.className = 'idea-row-text';
       text.textContent = idea.text;
-      card.appendChild(text);
+      main.appendChild(text);
+      if (idea.notes) {
+        const notes = document.createElement('div');
+        notes.className = 'idea-row-notes';
+        notes.textContent = idea.notes;
+        main.appendChild(notes);
+      }
+      row.appendChild(main);
+
+      const actions = document.createElement('div');
+      actions.className = 'idea-row-actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'icon-btn';
+      editBtn.setAttribute('aria-label', 'Edit idea');
+      editBtn.innerHTML = iconSvg('edit');
+      editBtn.addEventListener('click', (e) => { e.stopPropagation(); openIdeaModal(idea); });
+      actions.appendChild(editBtn);
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
-      delBtn.className = 'idea-delete';
+      delBtn.className = 'icon-btn danger';
       delBtn.setAttribute('aria-label', 'Delete idea');
-      delBtn.innerHTML = '&times;';
-      delBtn.addEventListener('click', async () => {
+      delBtn.innerHTML = iconSvg('trash');
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete this idea?')) return;
         try {
           await deleteIdea(idea.id);
           await updateMarketing();
         } catch (err) { showToast('Could not delete — try again'); }
       });
-      card.appendChild(delBtn);
-      els.ideaList.appendChild(card);
+      actions.appendChild(delBtn);
+      row.appendChild(actions);
+
+      els.ideaList.appendChild(row);
     });
   }
 
@@ -2187,6 +2293,51 @@
       await updateMarketing();
     } catch (err) {
       showToast('Could not add idea — try again');
+    }
+  });
+
+  // Editing an idea: text + a notes field to build on it over time (references,
+  // angles, next steps…) without cluttering the quick-capture list view.
+  function openIdeaModal(idea) {
+    editingIdeaId = idea.id;
+    els.ideaFText.value = idea.text;
+    els.ideaFNotes.value = idea.notes || '';
+    els.ideaModalBackdrop.classList.add('open');
+    els.ideaFText.focus();
+  }
+  function closeIdeaModal() {
+    els.ideaModalBackdrop.classList.remove('open');
+    editingIdeaId = null;
+  }
+  els.ideaModalClose.addEventListener('click', closeIdeaModal);
+  els.ideaModalCancel.addEventListener('click', closeIdeaModal);
+  els.ideaModalBackdrop.addEventListener('click', (e) => { if (e.target === els.ideaModalBackdrop) closeIdeaModal(); });
+
+  els.ideaEditForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!editingIdeaId) return;
+    const text = els.ideaFText.value.trim();
+    if (!text) { showToast('Idea text is required'); els.ideaFText.focus(); return; }
+    try {
+      await patchIdea(editingIdeaId, { text, notes: els.ideaFNotes.value.trim() || null });
+      closeIdeaModal();
+      await updateMarketing();
+      showToast('Idea updated');
+    } catch (err) {
+      showToast('Could not save — try again');
+    }
+  });
+
+  els.ideaModalDelete.addEventListener('click', async () => {
+    if (!editingIdeaId) return;
+    if (!confirm('Delete this idea?')) return;
+    try {
+      await deleteIdea(editingIdeaId);
+      closeIdeaModal();
+      await updateMarketing();
+      showToast('Idea deleted');
+    } catch (err) {
+      showToast('Could not delete — try again');
     }
   });
 
@@ -2349,7 +2500,8 @@
       if (document.visibilityState !== 'visible') return;
       if (els.modalBackdrop.classList.contains('open') || els.archiveBackdrop.classList.contains('open')) return;
       try { await afterMutation(); } catch (err) { /* keep last-known-good state on a transient failure */ }
-      if (!els.viewMarketing.hidden && !els.mktModalBackdrop.classList.contains('open')) {
+      const mktModalsClosed = !els.mktModalBackdrop.classList.contains('open') && !els.ideaModalBackdrop.classList.contains('open');
+      if (!els.viewMarketing.hidden && mktModalsClosed) {
         try { await updateMarketing(); } catch (err) { /* keep last-known-good state on a transient failure */ }
       }
     }, POLL_MS);

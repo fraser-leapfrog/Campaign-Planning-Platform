@@ -24,7 +24,9 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_deleted ON campaigns(deleted);
 CREATE TABLE IF NOT EXISTS marketing_ideas (
   id TEXT PRIMARY KEY,
   text TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  notes TEXT,                               -- freeform, for building on the idea over time
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS marketing_calendar (
