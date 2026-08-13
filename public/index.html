@@ -493,24 +493,20 @@
   .idea-board-card { margin-bottom: 20px; }
   .idea-form { display: flex; gap: 10px; margin-bottom: 16px; }
   .idea-form input { flex: 1; }
-  /* One tidy row per idea (not wrapped chips) — click a row to open it and add
-     notes/detail; the title + a one-line notes preview keep the list scannable. */
-  /* Caps at roughly 5 rows tall (more if they're all short, fewer if notes make
-     them tall) then scrolls, so a long-running idea list doesn't push the
+  /* One tidy row per idea (not wrapped chips) — just the title, click a row (or
+     its pencil icon) to open it and see/add notes; keeping notes out of the list
+     view is deliberate so the board stays scannable at a glance. Capped at
+     roughly 5 rows then scrolls, so a long-running list doesn't push the
      calendar further down the page every time you add one. */
-  .idea-list { display: flex; flex-direction: column; gap: 8px; max-height: 344px; overflow-y: auto; padding-right: 4px; }
+  .idea-list { display: flex; flex-direction: column; gap: 8px; max-height: 270px; overflow-y: auto; padding-right: 4px; }
   .idea-row {
-    display: flex; align-items: flex-start; gap: 12px; background: var(--surface-2);
+    display: flex; align-items: center; gap: 12px; background: var(--surface-2);
     border: 1px solid var(--line); border-left: 3px solid var(--pink); border-radius: var(--radius-m);
     padding: 12px 14px; cursor: pointer;
   }
   .idea-row:hover { border-color: var(--purple-2); }
   .idea-row-main { flex: 1; min-width: 0; }
   .idea-row-text { font-size: 13.5px; font-weight: 500; }
-  .idea-row-notes {
-    margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line);
-    font-size: 12px; color: var(--text-muted); white-space: pre-wrap;
-  }
   .idea-row-actions { flex: none; display: flex; gap: 6px; }
   .idea-empty, .calendar-empty { font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
 
@@ -2249,12 +2245,6 @@
       text.className = 'idea-row-text';
       text.textContent = idea.text;
       main.appendChild(text);
-      if (idea.notes) {
-        const notes = document.createElement('div');
-        notes.className = 'idea-row-notes';
-        notes.textContent = idea.notes;
-        main.appendChild(notes);
-      }
       row.appendChild(main);
 
       const actions = document.createElement('div');
