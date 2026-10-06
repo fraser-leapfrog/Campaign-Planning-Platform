@@ -57,9 +57,42 @@ export default {
   },
 };
 
+// Keeps each campaign's status in step with its dates, so nobody has to remember
+// to flip it by hand. Runs on every list request (the board polls every 20s and
+// refreshes after every edit), which means a date change is corrected the moment
+// it's saved and ended campaigns tick over to Completed with no cron needed.
+//   - end date has passed                      -> Completed
+//   - start date is still ahead, but it was
+//     sitting at Live / In Flight / Completed  -> Scheduled (i.e. back to Upcoming)
+// "Today" is the UK calendar date, not UTC, so campaigns roll over at UK midnight.
+async function reconcileStatuses(env) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type) => parts.find((p) => p.type === type).value;
+  const today = `${get("year")}-${get("month")}-${get("day")}`;
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE campaigns SET status = 'Completed', updated_at = datetime('now')
+       WHERE end_date IS NOT NULL AND end_date < ?1 AND status != 'Completed'`
+    ).bind(today),
+    // The end_date guard stops a bad row (end before start) flip-flopping between the two rules.
+    env.DB.prepare(
+      `UPDATE campaigns SET status = 'Scheduled', updated_at = datetime('now')
+       WHERE start_date IS NOT NULL AND start_date > ?1
+         AND (end_date IS NULL OR end_date >= ?1)
+         AND status IN ('Live', 'In Flight', 'Completed')`
+    ).bind(today),
+  ]);
+}
+
 async function handleList(request, env) {
   const email = requireAccess(request);
   if (!email) return json({ error: "unauthorized" }, 401);
+
+  // A failed tidy-up shouldn't stop the board loading.
+  try { await reconcileStatuses(env); } catch (err) { console.error("reconcileStatuses failed", err); }
 
   const { results } = await env.DB.prepare(
     `SELECT id, name AS n, status AS s, loc, deal, retarget AS rt,

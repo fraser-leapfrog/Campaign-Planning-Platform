@@ -2058,6 +2058,14 @@
       notes: els.fNotes.value.trim() || null,
       rotation: selectedRotation,
     };
+    // Extending the end date of a campaign that had already completed (e.g. a renewal)
+    // reopens it: the server auto-completes anything past its end date, so without this
+    // it would sit on "Completed" with a future end date. (If the start is still ahead,
+    // the server then moves it on to Scheduled.) Only when the status wasn't changed by hand.
+    if (editModalGroupRef && editModalGroupRef.s === 'Completed' && selectedStatus === 'Completed'
+        && formData.end && formData.end !== editModalGroupRef.end && formData.end >= isoDate(todayMidnight())) {
+      formData.s = 'Live';
+    }
     const submitBtn = els.form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     try {
