@@ -57,6 +57,15 @@ export default {
   },
 };
 
+// A date typed as 1/11/26 into <input type="date"> arrives as year 0026, which silently
+// files the campaign ~2,000 years in the past (it shows as Live Now and inflates the
+// analytics). Two-digit years are always meant as 20xx, so fix them on the way in...
+function normaliseDate(v) {
+  if (typeof v !== "string") return v;
+  const m = v.match(/^00(\d\d)-(\d\d-\d\d)$/);
+  return m ? `20${m[1]}-${m[2]}` : v;
+}
+
 // Keeps each campaign's status in step with its dates, so nobody has to remember
 // to flip it by hand. Runs on every list request (the board polls every 20s and
 // refreshes after every edit), which means a date change is corrected the moment
@@ -73,6 +82,11 @@ async function reconcileStatuses(env) {
   const today = `${get("year")}-${get("month")}-${get("day")}`;
 
   await env.DB.batch([
+    // ...and repair any that already got in (runs first, so the status rules below see real dates).
+    env.DB.prepare(`UPDATE campaigns SET start_date = '20' || substr(start_date, 3) WHERE start_date GLOB '00[0-9][0-9]-*'`),
+    env.DB.prepare(`UPDATE campaigns SET end_date = '20' || substr(end_date, 3) WHERE end_date GLOB '00[0-9][0-9]-*'`),
+    env.DB.prepare(`UPDATE marketing_calendar SET date = '20' || substr(date, 3) WHERE date GLOB '00[0-9][0-9]-*'`),
+    env.DB.prepare(`UPDATE marketing_calendar SET end_date = '20' || substr(end_date, 3) WHERE end_date GLOB '00[0-9][0-9]-*'`),
     env.DB.prepare(
       `UPDATE campaigns SET status = 'Completed', updated_at = datetime('now')
        WHERE end_date IS NOT NULL AND end_date < ?1 AND status != 'Completed'`
@@ -125,8 +139,8 @@ async function handleCreate(request, env) {
       JSON.stringify(Array.isArray(body.loc) ? body.loc : []),
       body.deal || null,
       body.rt || null,
-      body.start || null,
-      body.end || null,
+      normaliseDate(body.start) || null,
+      normaliseDate(body.end) || null,
       body.notes || null,
       body.rotation || null
     )
@@ -157,7 +171,11 @@ async function handlePatch(request, env, id) {
   for (const [field, col] of Object.entries(colByField)) {
     if (!(field in body)) continue;
     sets.push(`${col} = ?`);
-    values.push(field === "deleted" ? (body[field] ? 1 : 0) : body[field]);
+    values.push(
+      field === "deleted" ? (body[field] ? 1 : 0)
+      : field === "start" || field === "end" ? normaliseDate(body[field])
+      : body[field]
+    );
   }
   if ("loc" in body) {
     sets.push("loc = ?");
@@ -197,8 +215,8 @@ async function handleReplaceAll(request, env) {
         JSON.stringify(Array.isArray(r.loc) ? r.loc : []),
         r.deal || null,
         r.rt || null,
-        r.start || null,
-        r.end || null,
+        normaliseDate(r.start) || null,
+        normaliseDate(r.end) || null,
         r.notes || null,
         r.rotation || null,
         r.deleted ? 1 : 0
@@ -304,7 +322,7 @@ async function handleMarketingCreate(request, env) {
     `INSERT INTO marketing_calendar (id, name, date, end_date, type, status, notes)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
   )
-    .bind(id, body.name.trim(), body.date, body.end_date || null, body.type || null, body.status || null, body.notes || null)
+    .bind(id, body.name.trim(), normaliseDate(body.date), normaliseDate(body.end_date) || null, body.type || null, body.status || null, body.notes || null)
     .run();
 
   return json({ id }, 201);
@@ -322,7 +340,7 @@ async function handleMarketingPatch(request, env, id) {
   for (const [field, col] of Object.entries(colByField)) {
     if (!(field in body)) continue;
     sets.push(`${col} = ?`);
-    values.push(body[field]);
+    values.push(field === "date" || field === "end_date" ? normaliseDate(body[field]) : body[field]);
   }
   if (!sets.length) return json({ error: "no fields to update" }, 400);
 

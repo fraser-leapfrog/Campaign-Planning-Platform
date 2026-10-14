@@ -2026,6 +2026,18 @@
     setRotation(btn.dataset.rotation);
   });
 
+  // <input type="date"> turns a typed 1/11/26 into the year 0026, which would file the
+  // campaign ~2,000 years in the past. Two-digit years are meant as 20xx; anything else
+  // outside 2000-2100 is a typo we'd rather flag than save.
+  function cleanTypedDate(iso) {
+    if (!iso) return { value: null };
+    const [y, mo, d] = iso.split('-');
+    let year = parseInt(y, 10);
+    if (year < 100) year += 2000;
+    if (!(year >= 2000 && year <= 2100)) return { error: true };
+    return { value: `${year}-${mo}-${d}` };
+  }
+
   // 1/6 bookings occupy 3 rows, 1/18 occupies 1 — same convention as the historical
   // data. Grows/shrinks the row count to match by creating, updating, or archiving
   // member rows as needed, then lets the caller refresh.
@@ -2047,14 +2059,16 @@
     const name = els.fName.value.trim();
     if (!name) { showToast('Campaign name is required'); els.fName.focus(); return; }
     if (selectedLocations.length === 0) { showToast('Pick at least one location'); return; }
+    const startClean = cleanTypedDate(els.fStart.value), endClean = cleanTypedDate(els.fEnd.value);
+    if (startClean.error || endClean.error) { showToast('Check the year on the campaign dates'); return; }
     const formData = {
       n: name,
       s: selectedStatus,
       loc: [...selectedLocations],
       deal: els.fDeal.value || null,
       rt: els.fRetarget.value || null,
-      start: els.fStart.value || null,
-      end: els.fEnd.value || null,
+      start: startClean.value,
+      end: endClean.value,
       notes: els.fNotes.value.trim() || null,
       rotation: selectedRotation,
     };
@@ -2465,10 +2479,12 @@
     const date = els.mktFDate.value;
     if (!name) { showToast('Campaign name is required'); els.mktFName.focus(); return; }
     if (!date) { showToast('Date is required'); els.mktFDate.focus(); return; }
+    const dateClean = cleanTypedDate(date), endDateClean = cleanTypedDate(els.mktFEndDate.value);
+    if (dateClean.error || endDateClean.error) { showToast('Check the year on the dates'); return; }
     const fields = {
       name,
-      date,
-      end_date: els.mktFEndDate.value || null,
+      date: dateClean.value,
+      end_date: endDateClean.value,
       type: els.mktFType.value || null,
       status: els.mktFStatus.value || null,
       notes: els.mktFNotes.value.trim() || null,
