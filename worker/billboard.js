@@ -47,6 +47,7 @@ const SCHEMA = [
      share_of_voice TEXT NOT NULL DEFAULT '1/6',
      include_footfall INTEGER NOT NULL DEFAULT 1,
      include_extra_pages INTEGER NOT NULL DEFAULT 1,
+     show_agreed_line INTEGER NOT NULL DEFAULT 1,
      notes TEXT NOT NULL DEFAULT '',
      created_by TEXT,
      created_at TEXT NOT NULL,
@@ -80,6 +81,10 @@ const SEED_CAMPAIGNS = [{
   share_of_voice: "1/6",
 }];
 
+const ADDED_CAMPAIGN_COLUMNS = [
+  ["show_agreed_line", "INTEGER NOT NULL DEFAULT 1"],   // agreed-per-day line on the plays chart
+];
+
 let schemaReady = false;
 
 // Safe to run from several requests at once (the tab's first load fires three in parallel):
@@ -87,6 +92,16 @@ let schemaReady = false;
 async function ensureSchema(env) {
   if (schemaReady) return;
   await env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)));
+  // Columns added after the first release: add them to existing tables.
+  const cols = (await env.DB.prepare("PRAGMA table_info(billboard_campaigns)").all()).results.map((r) => r.name);
+  for (const [col, decl] of ADDED_CAMPAIGN_COLUMNS) {
+    if (cols.includes(col)) continue;
+    try {
+      await env.DB.prepare(`ALTER TABLE billboard_campaigns ADD COLUMN ${col} ${decl}`).run();
+    } catch (e) {
+      if (!/duplicate column/i.test(String(e))) throw e;   // a parallel request added it first
+    }
+  }
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM billboard_screens").first();
   if (n === 0) {
     // INSERT OR IGNORE: a parallel request that already seeded a name (UNIQUE) just skips it.
@@ -535,6 +550,7 @@ function campaignFromRow(r) {
   return {
     ...r, screen_ids: JSON.parse(r.screen_ids || "[]"), artworks: JSON.parse(r.artworks || "[]"),
     include_footfall: !!r.include_footfall, include_extra_pages: !!r.include_extra_pages,
+    show_agreed_line: r.show_agreed_line === undefined ? true : !!r.show_agreed_line,
   };
 }
 
@@ -653,11 +669,11 @@ async function route(request, env, path, email) {
     const now = new Date().toISOString();
     const r = await env.DB.prepare(
       `INSERT INTO billboard_campaigns (client_name, start_date, end_date, screen_ids, artworks, share_of_voice,
-         include_footfall, include_extra_pages, notes, created_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`).bind(
+         include_footfall, include_extra_pages, show_agreed_line, notes, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`).bind(
       c.client_name.trim(), c.start_date, c.end_date, JSON.stringify(c.screen_ids.map(Number)),
       JSON.stringify([...new Set(c.artworks)]), c.share_of_voice, c.include_footfall ? 1 : 0,
-      c.include_extra_pages ? 1 : 0, String(c.notes || ""), email, now, now).first();
+      c.include_extra_pages ? 1 : 0, c.show_agreed_line === false ? 0 : 1, String(c.notes || ""), email, now, now).first();
     return json(campaignFromRow(r), 201);
   }
   if ((match = path.match(/^\/campaigns\/(\d+)$/))) {
@@ -667,10 +683,10 @@ async function route(request, env, path, email) {
       validateCampaign(c);
       const r = await env.DB.prepare(
         `UPDATE billboard_campaigns SET client_name=?, start_date=?, end_date=?, screen_ids=?, artworks=?,
-           share_of_voice=?, include_footfall=?, include_extra_pages=?, notes=?, updated_at=? WHERE id=? RETURNING *`).bind(
+           share_of_voice=?, include_footfall=?, include_extra_pages=?, show_agreed_line=?, notes=?, updated_at=? WHERE id=? RETURNING *`).bind(
         c.client_name.trim(), c.start_date, c.end_date, JSON.stringify(c.screen_ids.map(Number)),
         JSON.stringify([...new Set(c.artworks)]), c.share_of_voice, c.include_footfall ? 1 : 0,
-        c.include_extra_pages ? 1 : 0, String(c.notes || ""), new Date().toISOString(), id).first();
+        c.include_extra_pages ? 1 : 0, c.show_agreed_line === false ? 0 : 1, String(c.notes || ""), new Date().toISOString(), id).first();
       if (!r) throw new ApiError("Campaign not found", 404);
       return json(campaignFromRow(r));
     }

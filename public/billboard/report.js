@@ -16,10 +16,17 @@ function header(title, big = false) {
     <h1 class="title${big ? " big" : ""}">${esc(title)}</h1><div class="rule"></div>`;
 }
 
-function perfTable(rows) {
-  return `<table class="perf"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>
+// One text size for the whole Content column, on every slide of the table, picked from the
+// longest name, so every content name is formatted the same.
+function contentSizeClass(rows) {
+  const longest = Math.max(0, ...rows.map((r) => r.artwork.length));
+  return longest <= 42 ? "" : longest <= 50 ? " content-sm" : " content-xs";
+}
+
+function perfTable(rows, sizeClass = "") {
+  return `<table class="perf${sizeClass}"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>
     <thead><tr><th>Content</th><th>Location</th><th>Total Plays</th><th>Total Time Played</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr><td${r.artwork.length > 42 ? ' class="long"' : ""}>${esc(r.artwork)}</td><td>${esc(r.screen)}</td>
+    ${rows.map((r) => `<tr><td>${esc(r.artwork)}</td><td>${esc(r.screen)}</td>
       <td>${fmtInt(r.plays)}</td><td>${fmtHMS(r.airtime_s)}</td></tr>`).join("")}</tbody></table>`;
 }
 
@@ -59,6 +66,7 @@ function buildSlides(model, photo) {
   const note = model.isComplete ? "" : `Interim report. The campaign runs until ${longDate(c.end_date)}.`;
   let rows = model.byArtworkScreen();
   if (!rows.length) rows = [{ artwork: "No plays found", screen: "", plays: 0, airtime_s: 0 }];
+  const sizeClass = contentSizeClass(rows);
   const pages = [rows.slice(0, ROWS_FIRST_SLIDE)];
   for (let i = ROWS_FIRST_SLIDE; i < rows.length; i += ROWS_PER_SLIDE) pages.push(rows.slice(i, i + ROWS_PER_SLIDE));
   out.push(`<div class="slide detail">${header("Campaign Performance Detail")}
@@ -72,9 +80,9 @@ function buildSlides(model, photo) {
       <div class="period"><div class="label">Reporting Period</div><div class="dates">${esc(period.dates)}</div>
         <div class="year">${esc(period.year)}</div>${note ? `<div class="note">${esc(note)}</div>` : ""}</div>
     </div>
-    ${perfTable(pages[0])}</div>`);
+    ${perfTable(pages[0], sizeClass)}</div>`);
   for (const p of pages.slice(1)) {
-    out.push(`<div class="slide continued">${header("Campaign Performance Detail (continued)")}${perfTable(p)}</div>`);
+    out.push(`<div class="slide continued">${header("Campaign Performance Detail (continued)")}${perfTable(p, sizeClass)}</div>`);
   }
 
   // ---- optional extra slides
@@ -83,7 +91,7 @@ function buildSlides(model, photo) {
     const labelEvery = Math.max(1, Math.ceil(days.length / (footfall ? 8 : 14)));
     const labels = days.map((d) => niceDate(d.date, { year: false }));
     const w = footfall ? 536 : 1130;
-    const agreedDay = avd ? avd.weekly / 7 : null;
+    const agreedDay = avd && c.show_agreed_line !== false ? avd.weekly / 7 : null;   // per-campaign toggle
     const key = agreedDay ? `<span class="ref-key"><i></i>Agreed: ${fmtInt(agreedDay)} per day</span>` : "";
     const playsChart = columnChart(labels, days.map((d) => d.plays), { width: w, height: 440, labelEvery, axisFont: 14,
       refValue: agreedDay, title: "Plays per day" });

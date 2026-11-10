@@ -67,11 +67,12 @@ const savedCampaign = () => state.campaigns.find((c) => c.id === state.form.id);
 
 function blankForm() {
   return { id: null, client_name: "", start_date: today(), end_date: addDays(today(), 27), screen_ids: [], artworks: [],
-    share_of_voice: "1/6", include_footfall: true, include_extra_pages: true, notes: "", has_photo: false };
+    share_of_voice: "1/6", include_footfall: true, include_extra_pages: true, show_agreed_line: true, notes: "",
+    has_photo: false };
 }
 
 const FIELDS = ["client_name", "start_date", "end_date", "screen_ids", "artworks", "share_of_voice", "include_footfall",
-  "include_extra_pages", "notes"];
+  "include_extra_pages", "show_agreed_line", "notes"];
 function isDirty() {
   const saved = savedCampaign();
   if (!saved) return true;
@@ -171,6 +172,8 @@ function editorHtml() {
         <span class="field-label">Report options</span>
         <label class="bb-check"><input type="checkbox" data-f="include_footfall" ${f.include_footfall ? "checked" : ""}/> Include footfall data (potential impressions)</label>
         <label class="bb-check"><input type="checkbox" data-f="include_extra_pages" ${f.include_extra_pages ? "checked" : ""}/> Include extra pages (daily performance, time of day)</label>
+        <label class="bb-check"><input type="checkbox" data-f="show_agreed_line" ${f.show_agreed_line !== false ? "checked" : ""}/> Show the agreed-plays line on the plays-per-day chart</label>
+        <span class="field-hint">The agreed line needs a package (1/6 or 1/18) and the extra pages.</span>
       </div>
       <div class="field">
         <span class="field-label" id="bb-art-label">Artworks</span>

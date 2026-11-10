@@ -94,7 +94,9 @@ col.c1 { width: 336pt; } col.c2 { width: 254pt; } col.c3 { width: 146pt; } col.c
 .side .tile .num { font-size: 30pt; }
 .side .tile .sub { font-size: 10pt; color: var(--mauve); margin-top: 4pt; }
 .foot-source { position: absolute; left: 43pt; top: 515pt; font-size: 10pt; font-weight: 700; color: var(--mauve); }
-table.perf td.long { font-size: 9pt; }
+/* Content column: one size for every row of the table (set per report from the longest name) */
+table.perf.content-sm td:first-child { font-size: 9.5pt; }
+table.perf.content-xs td:first-child { font-size: 8.5pt; }
 .ref-key { float: right; text-transform: none; color: var(--plum); font-weight: 700; font-size: 10.5pt; }
 .ref-key i { display: inline-block; width: 18pt; height: 2.5pt; background: #e43f84; vertical-align: middle;
              margin-right: 6pt; border-radius: 1pt; }
