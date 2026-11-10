@@ -1,0 +1,120 @@
+/* Leapfrog Advertising campaign report.
+   Matches the existing Google Slides report: 16:9 slides (960 x 540 pt),
+   Calibri (Carlito, its metric twin) for text, Arial for tables.
+   Positions/sizes below were measured from "Swansea University - Campaign Report". */
+
+:root {
+  --plum: #2b1533;       /* titles */
+  --deep: #510780;       /* big numbers, table header, period panel */
+  --purple: #7a1ab5;     /* small labels */
+  --mauve: #8b7797;      /* secondary labels, "Source" */
+  --lavender: #eee0f5;   /* tiles, rule, table lines */
+  --font: "Calibri", "Carlito", "Helvetica Neue", Arial, sans-serif;
+  --table-font: Arial, "Helvetica Neue", sans-serif;
+}
+
+@page { size: 960pt 540pt; margin: 0; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-family: var(--font); color: #000; }
+
+.slide { position: relative; width: 960pt; height: 540pt; overflow: hidden; background: #fff;
+         break-after: page; page-break-after: always; }
+.slide:last-child { break-after: auto; page-break-after: auto; }
+
+/* header */
+.brand-tag { position: absolute; left: 43pt; top: 30pt; font-size: 11pt; font-weight: 700; color: var(--purple); }
+.report-tag { position: absolute; right: 35pt; top: 30pt; font-size: 11pt; color: var(--mauve); letter-spacing: 0.01em; }
+.title { position: absolute; left: 43pt; right: 35pt; top: 64pt; margin: 0; font-weight: 700; color: var(--plum);
+         font-size: 26pt; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title.big { font-size: 34pt; top: 58pt; }
+.rule { position: absolute; left: 43pt; right: 35pt; top: 101pt; height: 1.5pt; background: var(--lavender); }
+.slide.cover .rule { top: 112pt; }
+
+/* photo (optional, front page only) */
+.photo { position: absolute; background: var(--lavender) center / cover no-repeat; }
+.cover .photo { left: 43pt; top: 141pt; width: 422pt; height: 370pt; }
+
+/* cover: headline number + location rows */
+.headline { position: absolute; left: 501pt; width: 426pt; top: 136pt; text-align: center; }
+.headline .num { font-size: 60pt; font-weight: 700; color: var(--deep); line-height: 1; }
+.headline .label { margin-top: 18pt; font-size: 13pt; font-weight: 700; color: var(--mauve); text-transform: uppercase; }
+.headline .sub { margin-top: 5pt; font-size: 12pt; font-weight: 700; color: var(--purple); }
+.locations { position: absolute; left: 501pt; width: 426pt; top: 250pt; }
+.loc { display: flex; align-items: center; height: 54pt; background: var(--lavender); border-radius: 6pt;
+       padding: 0 18pt; margin-bottom: 10pt; }
+.locations.compact .loc { height: 42pt; margin-bottom: 7pt; }
+.loc .n { width: 114pt; font-size: 24pt; font-weight: 700; color: var(--deep); }
+.locations.compact .loc .n { font-size: 20pt; }
+.loc .name { font-size: 11pt; font-weight: 700; color: var(--purple); }
+.cover.nophoto .headline { left: 43pt; width: 882pt; top: 140pt; }
+.cover.nophoto .locations { left: 230pt; width: 500pt; top: 262pt; }
+.cover.nophoto .source { left: 43pt; }
+.source { position: absolute; left: 501pt; top: 492pt; font-size: 13pt; font-weight: 700; color: var(--mauve); }
+.logo { position: absolute; right: 41pt; top: 457pt; width: 202pt; }
+.logo img { width: 100%; display: block; }
+
+/* detail: row of tiles + reporting period */
+.boxes { position: absolute; left: 43pt; width: 882pt; top: 120pt; height: 108pt; display: grid; gap: 13pt; }
+.boxes.n4 { grid-template-columns: repeat(4, 1fr); }
+.boxes.n3 { grid-template-columns: repeat(3, 1fr); }
+.tile { background: var(--lavender); border-radius: 6pt; padding: 15pt 18pt 0; }
+.tile .num { font-size: 30pt; font-weight: 700; color: var(--deep); line-height: 1.05; white-space: nowrap; }
+.tile .label { font-size: 11pt; font-weight: 700; color: var(--purple); text-transform: uppercase; margin-top: 2pt; }
+.tile .sub { font-size: 10pt; color: var(--mauve); margin-top: 4pt; line-height: 1.25; }
+.tile .sub.strong { color: var(--deep); font-weight: 700; font-size: 11pt; }
+.tile.delivered { box-shadow: inset 0 0 0 2pt var(--purple); }
+.period { background: var(--deep); border-radius: 6pt; padding: 15pt 18pt; color: #fff; }
+.period .label { font-size: 10pt; font-weight: 700; color: var(--lavender); text-transform: uppercase; }
+.period .dates { font-size: 15pt; font-weight: 700; margin-top: 6pt; line-height: 1.15; }
+.period .year { font-size: 15pt; }
+.period .note { font-size: 9pt; color: var(--lavender); margin-top: 5pt; line-height: 1.25; }
+
+/* table */
+table.perf { position: absolute; left: 43pt; width: 882pt; border-collapse: collapse; table-layout: fixed;
+             font-family: var(--table-font); font-size: 11pt; }
+.detail table.perf { top: 248pt; }
+.continued table.perf { top: 123pt; }
+table.perf th { background: var(--deep); color: #fff; font-weight: 700; text-align: left; height: 28pt;
+                padding: 0 7pt; border: 1px solid var(--deep); }
+table.perf td { height: 28pt; padding: 0 7pt; border: 1px solid var(--lavender); white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+col.c1 { width: 336pt; } col.c2 { width: 254pt; } col.c3 { width: 146pt; } col.c4 { width: 146pt; }
+
+/* extra slides: charts + side tiles */
+.panel { position: absolute; top: 123pt; height: 387pt; border: 1.5pt solid var(--lavender); border-radius: 6pt;
+         padding: 14pt 16pt 10pt; }
+.panel .cap { font-size: 11pt; font-weight: 700; color: var(--purple); text-transform: uppercase; margin-bottom: 8pt; }
+.panel.full { left: 43pt; width: 882pt; }
+.panel.left { left: 43pt; width: 434pt; }
+.panel.right { left: 491pt; width: 434pt; }
+.panel.wide { left: 43pt; width: 624pt; }
+.side { position: absolute; left: 681pt; width: 244pt; }
+.side .tile { width: 244pt; margin-bottom: 13pt; height: 120pt; padding-top: 22pt; }
+.side .tile .num { font-size: 30pt; }
+.side .tile .sub { font-size: 10pt; color: var(--mauve); margin-top: 4pt; }
+.foot-source { position: absolute; left: 43pt; top: 515pt; font-size: 10pt; font-weight: 700; color: var(--mauve); }
+table.perf td.long { font-size: 9pt; }
+.ref-key { float: right; text-transform: none; color: var(--plum); font-weight: 700; font-size: 10.5pt; }
+.ref-key i { display: inline-block; width: 18pt; height: 2.5pt; background: #e43f84; vertical-align: middle;
+             margin-right: 6pt; border-radius: 1pt; }
+
+/* ---------- on-screen view (hidden when printing / saving as PDF) ---------- */
+@media screen {
+  html { background: #e9e3ee; }
+  body { padding: 76px 0 40px; }
+  .slide { margin: 0 auto 24px; box-shadow: 0 6px 24px rgba(43, 21, 51, 0.18); }
+  .toolbar { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; align-items: center; gap: 14px;
+             padding: 12px 20px; background: #2b1533; color: #fff; font: 14px/1.3 var(--font); }
+  .toolbar .grow { flex: 1; }
+  .toolbar button { font: 700 14px var(--font); border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer;
+                    background: #e43f84; color: #fff; }
+  .toolbar button:disabled { opacity: .5; cursor: wait; }
+  .toolbar .hint { color: #d9c7e6; font-size: 12.5px; }
+  .status { max-width: 760px; margin: 40px auto; font: 15px/1.5 var(--font); color: #2b1533; text-align: center; }
+  .status.error { color: #b3261e; }
+}
+@media print {
+  .toolbar, .status { display: none !important; }
+}
+@media print { #slides { zoom: 1 !important; } }

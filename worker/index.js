@@ -5,6 +5,7 @@
 // not classic Cloudflare Pages).
 
 import { json, requireAccess, rowToJson } from "./utils.js";
+import { handleBillboard } from "./billboard.js";
 
 export default {
   async fetch(request, env) {
@@ -49,6 +50,10 @@ export default {
     if (mcIdMatch && request.method === "DELETE") {
       return handleMarketingDelete(request, env, decodeURIComponent(mcIdMatch[1]));
     }
+
+    // Billboard Reporting — client proof-of-play/footfall reports (own billboard_* tables).
+    const billboard = await handleBillboard(request, env, pathname);
+    if (billboard) return billboard;
 
     if (pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
 

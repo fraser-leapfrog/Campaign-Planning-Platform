@@ -651,6 +651,7 @@
   <div class="tabs page-nav" id="page-tabs" role="tablist" aria-label="Page">
     <button class="tab-btn" role="tab" data-page="campaign" aria-selected="true">Campaign Board</button>
     <button class="tab-btn" role="tab" data-page="marketing" aria-selected="false">Marketing Planner</button>
+    <button class="tab-btn" role="tab" data-page="billboard" aria-selected="false">Billboard Reporting</button>
   </div>
 
   <div id="view-campaign">
@@ -833,6 +834,22 @@
       <p class="field-hint" style="margin: -6px 0 14px;">Double-click a day to pencil in a campaign. Click an existing one to edit or remove it.</p>
       <div class="calendar-grid" id="calendar-grid"></div>
     </div>
+  </div>
+
+  <!-- Billboard Reporting: client proof-of-play + footfall reports (Navori + Datajam).
+       Logic lives in /billboard/billboard.js; API in worker/billboard.js. -->
+  <div id="view-billboard" hidden>
+    <div class="page-head">
+      <p class="eyebrow">Billboard Reporting</p>
+      <h1>Billboard Reporting</h1>
+      <p>Client campaign reports: plays from Navori, potential impressions from Datajam, agreed vs delivered plays. Build a campaign, fetch its numbers, then save the report as a PDF.</p>
+    </div>
+    <div class="tabs sub-tabs" id="bb-subtabs" role="tablist" aria-label="Billboard Reporting section">
+      <button class="tab-btn" role="tab" data-bb="reports" aria-selected="true">Reports</button>
+      <button class="tab-btn" role="tab" data-bb="screens" aria-selected="false">Screens</button>
+    </div>
+    <div id="bb-reports"></div>
+    <div id="bb-screens" hidden></div>
   </div>
 </main>
 
@@ -1657,9 +1674,11 @@
     [...els.pageTabs.children].forEach(b => b.setAttribute('aria-selected', String(b === btn)));
     els.viewCampaign.hidden = view !== 'campaign';
     els.viewMarketing.hidden = view !== 'marketing';
+    document.getElementById('view-billboard').hidden = view !== 'billboard';
     // Re-render whichever Campaign Board sub-view (Board/Analytics) is currently selected.
     if (view === 'campaign' && !els.viewAnalytics.hidden) updateAnalytics();
     if (view === 'marketing') updateMarketing();
+    if (view === 'billboard' && window.Billboard) window.Billboard.show();
   });
 
   // Board / Analytics — nested inside the Campaign Board tab, since both look at
@@ -2685,6 +2704,8 @@
   init();
 })();
 </script>
+<link rel="stylesheet" href="/billboard/billboard.css" />
+<script type="module" src="/billboard/billboard.js"></script>
 
 </body>
 </html>

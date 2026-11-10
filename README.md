@@ -168,3 +168,51 @@ site."
   be Cloudflare's unified "Worker with static assets" type rather than
   classic Pages, which doesn't use that file-based convention — it's been
   consolidated into `worker/index.js` instead, with identical behavior.
+
+---
+
+## Billboard Reporting tab
+
+Client campaign reports for the DOOH screens: plays from **Navori QL**, potential impressions
+from **Datajam** JamBoxes, and agreed vs delivered plays. Ported from the local Python tool in
+`~/Downloads/leapfrog-campaign-reports`; same definitions, and verified to give identical numbers.
+
+**One-off setup: add four secrets** (Cloudflare dashboard → Workers & Pages →
+`campaign-planning-platform` → Settings → Variables and Secrets → Add → type **Secret**):
+
+| Name | Value |
+|---|---|
+| `NAVORI_USERNAME` | Navori QL login |
+| `NAVORI_PASSWORD` | Navori QL password |
+| `DATAJAM_EMAIL` | Datajam portal email |
+| `DATAJAM_PASSWORD` | Datajam portal password |
+
+Secrets added in the dashboard survive Git deploys. Don't put them in `wrangler.toml`. Until
+they're added, the tab shows a banner and can't fetch numbers.
+
+**Files**
+- `worker/billboard.js`: API under `/api/billboard/*`. Creates its own D1 tables on first use
+  (`billboard_screens`, `billboard_campaigns`, `billboard_photos`) and seeds the 6 screens with
+  their agreed rates plus the National Waterfront Museum campaign. It only stores settings and
+  fetches raw rows; the maths runs in the browser.
+- `public/billboard/`: the tab (`billboard.js`, `billboard.css`), the numbers (`model.js`), the
+  report (`report.html`, `report.js`, `report.css`, `charts.js`) and the report logo.
+
+**How the report becomes a PDF:** "Open report / Save as PDF" opens `/billboard/report.html`,
+built as 16:9 slides that copy the Google Slides report. Its **Save as PDF** button opens the
+browser's print window: choose *Save as PDF* (Chrome/Edge). The file name is filled in for you.
+
+**Gotchas**
+- Datajam only accepts **GET with a JSON body**, which `fetch()` in Workers refuses to send.
+  `datajamGet()` writes the HTTP request by hand over a TLS socket (`cloudflare:sockets`). It
+  stops reading once the full response has arrived, because Datajam's server drops the
+  connection abruptly (the runtime reports "Network connection lost").
+- Navori `GetReportings`: use `GroupByDate=false, GroupByGroup=false` (true *merges* rows).
+  Durations are in milliseconds.
+- Agreed plays per week are stored **per screen**. A location's total is the sum of its screens
+  (Parc Tawe 15,960 = 2 × 7,980; WMC 17,640 = 3 × 5,880).
+
+**Local testing** (no secrets in the repo; Access bypass only via the command line):
+```bash
+wrangler dev --local --env-file ~/Downloads/leapfrog-campaign-reports/.env --var DEV_LOCAL_EMAIL:local-test
+```

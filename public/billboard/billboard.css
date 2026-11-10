@@ -1,0 +1,89 @@
+/* Billboard Reporting tab. Reuses the app's variables and components (.chart-card, .field, .chip,
+   .btn ...); only the extra bits live here, scoped to #view-billboard. */
+
+#view-billboard .bb-banner {
+  border: 1px solid color-mix(in srgb, var(--st-orange) 50%, var(--line));
+  background: color-mix(in srgb, var(--st-orange) 10%, var(--surface));
+  border-radius: var(--radius-m); padding: 12px 16px; margin: 0 0 16px; font-size: 13.5px; line-height: 1.5;
+}
+#view-billboard .bb-layout { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { #view-billboard .bb-layout { grid-template-columns: minmax(0, 1fr); } }
+#view-billboard .chart-card { min-width: 0; }
+
+/* campaign list */
+#view-billboard .bb-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+#view-billboard .bb-item {
+  text-align: left; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface);
+  padding: 10px 12px; cursor: pointer; font: inherit; color: var(--text);
+}
+#view-billboard .bb-item:hover { border-color: var(--purple-2); }
+#view-billboard .bb-item[aria-current="true"] { border-color: var(--purple); box-shadow: inset 0 0 0 1px var(--purple); }
+#view-billboard .bb-item-name { font-weight: 500; font-size: 14px; }
+#view-billboard .bb-item-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+#view-billboard .bb-empty { padding: 18px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* artwork picker */
+#view-billboard .bb-art-tools { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+#view-billboard .bb-art-tools input { flex: 1; min-width: 180px; }
+#view-billboard .bb-art-list {
+  border: 1px solid var(--line); border-radius: var(--radius-m); max-height: 280px; overflow-y: auto;
+  background: var(--surface);
+}
+#view-billboard .bb-art-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--line);
+  font-size: 13px; cursor: pointer;
+}
+#view-billboard .bb-art-row:last-child { border-bottom: none; }
+#view-billboard .bb-art-row span.name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#view-billboard .bb-art-row span.plays { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#view-billboard .bb-art-row.missing span.plays { color: var(--st-orange); }
+
+/* photo */
+#view-billboard .bb-photo { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+#view-billboard .bb-photo img { width: 200px; max-width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-s); border: 1px solid var(--line); }
+
+/* actions */
+#view-billboard .bb-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+#view-billboard .btn-danger { color: var(--st-red); }
+#view-billboard .btn[disabled] { opacity: .55; cursor: not-allowed; }
+#view-billboard .bb-msg { font-size: 13px; color: var(--text-muted); }
+#view-billboard .bb-msg.error { color: var(--st-red); }
+
+/* results */
+#view-billboard .bb-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+#view-billboard .bb-stat { border: 1px solid var(--line); border-radius: var(--radius-m); padding: 12px 14px; background: var(--surface-2); }
+#view-billboard .bb-stat.delivered { border-color: var(--purple); }
+#view-billboard .bb-stat .v { font-family: var(--font-head); font-weight: 700; font-size: 24px; font-variant-numeric: tabular-nums; }
+#view-billboard .bb-stat .l { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+#view-billboard .bb-stat .d { font-size: 12.5px; color: var(--st-green); font-weight: 500; margin-top: 4px; }
+#view-billboard .bb-stat .d.under { color: var(--st-red); }
+#view-billboard .bb-warn {
+  font-size: 13px; border-left: 3px solid var(--st-orange); background: color-mix(in srgb, var(--st-orange) 8%, var(--surface));
+  padding: 7px 12px; border-radius: 4px; margin: 6px 0;
+}
+#view-billboard table.bb-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+#view-billboard table.bb-table th { text-align: left; font-weight: 500; color: var(--text-muted); border-bottom: 1px solid var(--line); padding: 6px 8px; }
+#view-billboard table.bb-table td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: middle; }
+#view-billboard table.bb-table .num { text-align: right; }
+#view-billboard .bb-table-wrap { overflow-x: auto; margin-top: 8px; }
+#view-billboard h3.bb-h3 { font-family: var(--font-head); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin: 18px 0 4px; }
+
+/* screens editor */
+#view-billboard table.bb-screens input, #view-billboard table.bb-screens select { width: 100%; min-width: 90px; font-size: 13px; padding: 6px 8px; }
+#view-billboard table.bb-screens input[type="number"] { min-width: 80px; }
+#view-billboard table.bb-screens input[type="checkbox"] { width: auto; min-width: 0; }
+#view-billboard table.bb-screens td.act { white-space: nowrap; }
+#view-billboard .bb-health td.disabled { color: var(--st-red); font-weight: 500; }
+
+/* number inputs aren't styled by the main stylesheet */
+#view-billboard input[type="number"] {
+  font-family: var(--font-body); font-size: 14px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px 12px; height: 42px; outline: none;
+  box-sizing: border-box; font-variant-numeric: tabular-nums;
+}
+#view-billboard table.bb-screens input, #view-billboard table.bb-screens select { height: 36px; }
+#view-billboard .bb-check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+#view-billboard .bb-check input { width: 16px; height: 16px; accent-color: var(--purple); }
+#view-billboard table.bb-screens [data-k="name"] { min-width: 150px; }
+#view-billboard table.bb-screens [data-k="location"] { min-width: 220px; }
+#view-billboard table.bb-screens select { min-width: 190px; }

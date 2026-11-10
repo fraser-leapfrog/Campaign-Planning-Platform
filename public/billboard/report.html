@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Campaign Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Carlito = metric-identical free twin of Calibri, the font of the Google Slides report this copies -->
+<link href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="/billboard/report.css" />
+</head>
+<body>
+<div class="toolbar">
+  <strong id="tb-title">Campaign report</strong>
+  <span class="hint grow">In the print window, set <b>Destination</b> to <b>Save as PDF</b>. The file name is filled in for you.</span>
+  <button type="button" id="save-pdf" disabled>Save as PDF</button>
+</div>
+<div class="status" id="status">Fetching the numbers from Navori and Datajam…</div>
+<div id="slides"></div>
+<script type="module" src="/billboard/report.js"></script>
+</body>
+</html>
