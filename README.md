@@ -187,8 +187,17 @@ from **Datajam** JamBoxes, and agreed vs delivered plays. Ported from the local 
 | `DATAJAM_EMAIL` | Datajam portal email |
 | `DATAJAM_PASSWORD` | Datajam portal password |
 
-Secrets added in the dashboard survive Git deploys. Don't put them in `wrangler.toml`. Until
-they're added, the tab shows a banner and can't fetch numbers.
+Secrets survive Git deploys; plain "Text" variables do **not** (each push wipes them). Don't put
+them in `wrangler.toml`. Until they're added, the tab shows a banner and can't fetch numbers.
+`/api/billboard/status` lists which setting *names* the Worker can see (never values).
+
+Easiest way to (re)set them from this Mac, reading straight from the local tool's `.env`:
+```bash
+wrangler login
+for k in NAVORI_USERNAME NAVORI_PASSWORD DATAJAM_EMAIL DATAJAM_PASSWORD; do ~/Downloads/leapfrog-campaign-reports/.venv/bin/python -c "import sys; from dotenv import dotenv_values; sys.stdout.write(dotenv_values('$HOME/Downloads/leapfrog-campaign-reports/.env')['$k'])" | wrangler secret put "$k" --name campaign-planning-platform; done
+```
+(`--name campaign-planning-platform` matters: `wrangler.toml`'s `name` is the old, unused one. Read the
+values with python-dotenv: the passwords are single-quoted in `.env`.)
 
 **Files**
 - `worker/billboard.js`: API under `/api/billboard/*`. Creates its own D1 tables on first use
@@ -203,6 +212,9 @@ built as 16:9 slides that copy the Google Slides report. Its **Save as PDF** but
 browser's print window: choose *Save as PDF* (Chrome/Edge). The file name is filled in for you.
 
 **Gotchas**
+- Navori ties a login token to the client IP, and Worker `fetch()` can leave Cloudflare from different
+  IPs, which gave `NOT_CONNECTED` in production (it worked locally). All Navori calls therefore go down
+  ONE keep-alive TLS socket (`KeepAliveHttps`), sharing one login; on `NOT_CONNECTED` it logs in once more.
 - Datajam only accepts **GET with a JSON body**, which `fetch()` in Workers refuses to send.
   `datajamGet()` writes the HTTP request by hand over a TLS socket (`cloudflare:sockets`). It
   stops reading once the full response has arrived, because Datajam's server drops the
