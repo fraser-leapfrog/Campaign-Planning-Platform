@@ -147,17 +147,24 @@ class Navori {
     this.token = null;
   }
 
-  async login() {
-    const data = await this.call("GetToken", { Login: this.env.NAVORI_USERNAME, Password: this.env.NAVORI_PASSWORD },
-      false);
-    if (!data.Token) throw new ApiError("Navori GetToken returned no token");
-    this.token = data.Token;
+  // One shared login: Navori appears to allow one session per user, so parallel calls that each
+  // logged in would cancel each other's tokens ("NOT_CONNECTED").
+  login() {
+    if (!this.loginPromise) {
+      this.loginPromise = this.call("GetToken", { Login: this.env.NAVORI_USERNAME, Password: this.env.NAVORI_PASSWORD },
+        false).then((data) => {
+        if (!data.Token) throw new ApiError("Navori GetToken returned no token");
+        this.token = data.Token;
+      }).catch((e) => { this.loginPromise = null; throw e; });
+    }
+    return this.loginPromise;
   }
 
   async call(method, payload, needsToken = true, retry = true) {
     if (needsToken && !this.token) await this.login();
+    const usedToken = this.token;
     const headers = { "Content-Type": "application/json; charset=utf-8" };
-    if (needsToken) headers.Token = this.token;
+    if (needsToken) headers.Token = usedToken;
     let res;
     try {
       res = await fetch(this.base + method, { method: "POST", headers, body: JSON.stringify(payload || {}) });
@@ -168,8 +175,10 @@ class Navori {
     const data = await res.json();
     const status = String(data.Status || "");
     if (status !== "SUCCESS") {
-      if (needsToken && retry && status.toUpperCase().includes("AUTHORI")) {
-        this.token = null;
+      // Session expired or replaced (e.g. someone logged in to QL elsewhere): log in again once.
+      // Only the first call to notice resets the token; the others then share the new login.
+      if (needsToken && retry && /AUTHORI|NOT_CONNECTED|TOKEN/i.test(status)) {
+        if (this.token === usedToken) { this.token = null; this.loginPromise = null; }
         return this.call(method, payload, needsToken, false);
       }
       throw new ApiError(`Navori ${method}: ${status || "no status"}${method === "GetToken" ? " (check the Navori login)" : ""}`);
