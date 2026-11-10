@@ -505,6 +505,8 @@ async function route(request, env, path, email) {
     return json({
       navori: !!(env.NAVORI_USERNAME && env.NAVORI_PASSWORD), datajam: !!(env.DATAJAM_EMAIL && env.DATAJAM_PASSWORD),
       today: todayLondon(),
+      // Names only (never values) of any login-like settings the Worker can see, to help spot typos.
+      settings_seen: Object.keys(env).filter((k) => /navori|datajam/i.test(k)).sort(),
     });
   }
 
