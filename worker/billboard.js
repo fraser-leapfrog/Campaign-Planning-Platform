@@ -574,7 +574,9 @@ export async function handleBillboard(request, env, pathname) {
   if (!email) return json({ error: "unauthorized" }, 401);
   try {
     await ensureSchema(env);
-    return await route(request, env, pathname.slice("/api/billboard".length), email);
+    const res = await route(request, env, pathname.slice("/api/billboard".length), email);
+    res.headers.set("Cache-Control", "no-store");   // always live numbers, never a cached copy
+    return res;
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status);
     console.error("billboard error", e);
