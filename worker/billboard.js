@@ -138,12 +138,70 @@ function needSecrets(env, names) {
   }
 }
 
+// --------------------------------------------------------------------------- keep-alive HTTPS socket
+// Navori ties a login token to the IP address that logged in. Worker fetch() requests can leave
+// Cloudflare from different IPs, so a token from GetToken came back NOT_CONNECTED on the next call.
+// Sending every Navori call down ONE keep-alive TLS connection keeps a single source IP.
+class KeepAliveHttps {
+  constructor(host) {
+    this.host = host;
+    this.socket = null;
+    this.queue = Promise.resolve();   // one request at a time on the connection
+  }
+
+  open() {
+    this.socket = connect({ hostname: this.host, port: 443 }, { secureTransport: "on" });
+    this.writer = this.socket.writable.getWriter();
+    this.reader = this.socket.readable.getReader();
+    this.opened = true;
+  }
+
+  close() {
+    if (!this.socket) return;
+    try { this.writer.releaseLock(); } catch (_) { /* ignore */ }
+    try { this.reader.releaseLock(); } catch (_) { /* ignore */ }
+    try { this.socket.close(); } catch (_) { /* ignore */ }
+    this.socket = null;
+  }
+
+  request(method, path, headers, body) {
+    const run = () => this.send(method, path, headers, body);
+    const p = this.queue.then(run, run);
+    this.queue = p.catch(() => {});
+    return p;
+  }
+
+  async send(method, path, headers, body) {
+    if (!this.socket) this.open();
+    const enc = new TextEncoder();
+    const bodyBytes = enc.encode(body || "");
+    const head = enc.encode(`${method} ${path} HTTP/1.1\r\nHost: ${this.host}\r\nConnection: keep-alive\r\n` +
+      `User-Agent: leapfrog-billboard-reporting\r\n` + Object.entries(headers).map(([k, v]) => `${k}: ${v}\r\n`).join("") +
+      `Content-Length: ${bodyBytes.length}\r\n\r\n`);
+    const req = new Uint8Array(head.length + bodyBytes.length);
+    req.set(head); req.set(bodyBytes, head.length);
+    try {
+      await this.writer.write(req);
+      const raw = await readHttpResponse(this.reader);
+      if (headerEnd(raw) < 0) throw new Error("connection closed");
+      const res = parseHttpResponse(raw);
+      if ((res.headers.connection || "").toLowerCase() === "close") this.close();
+      return res;
+    } catch (e) {
+      this.close();
+      throw new ApiError(`Navori: connection problem (${e.message || e})`);
+    }
+  }
+}
+
 // --------------------------------------------------------------------------- Navori
 class Navori {
   constructor(env) {
     needSecrets(env, ["NAVORI_USERNAME", "NAVORI_PASSWORD"]);
     this.env = env;
-    this.base = (env.NAVORI_BASE_URL || "https://saas.navori.com/NavoriService/Api/").replace(/\/?$/, "/");
+    const base = new URL(env.NAVORI_BASE_URL || "https://saas.navori.com/NavoriService/Api/");
+    this.path = base.pathname.replace(/\/?$/, "/");
+    this.http = new KeepAliveHttps(base.hostname);
     this.token = null;
   }
 
@@ -167,12 +225,20 @@ class Navori {
     if (needsToken) headers.Token = usedToken;
     let res;
     try {
-      res = await fetch(this.base + method, { method: "POST", headers, body: JSON.stringify(payload || {}) });
+      res = await this.http.request("POST", this.path + method, headers, JSON.stringify(payload || {}));
     } catch (e) {
-      throw new ApiError(`Navori ${method}: network error`);
+      // Connection dropped (e.g. idle timeout): reconnect, which needs a fresh login on the new connection.
+      if (needsToken && retry) {
+        if (this.token === usedToken) { this.token = null; this.loginPromise = null; }
+        return this.call(method, payload, needsToken, false);
+      }
+      throw e instanceof ApiError ? e : new ApiError(`Navori ${method}: network error`);
     }
-    if (!res.ok) throw new ApiError(`Navori ${method}: HTTP ${res.status}`);
-    const data = await res.json();
+    if (res.status !== 200) throw new ApiError(`Navori ${method}: HTTP ${res.status}`);
+    let data;
+    try { data = JSON.parse(new TextDecoder().decode(res.bodyBytes)); } catch (_) {
+      throw new ApiError(`Navori ${method}: response was not JSON`);
+    }
     const status = String(data.Status || "");
     if (status !== "SUCCESS") {
       // Session expired or replaced (e.g. someone logged in to QL elsewhere): log in again once.
@@ -220,40 +286,22 @@ async function datajamGet(env, endpoint, body) {
     req.set(headBytes); req.set(payload, headBytes.length);
     await writer.write(req);
     writer.releaseLock();
-    // Read until the whole response has arrived. Datajam's server drops the TLS connection
-    // abruptly afterwards, which the runtime reports as "Network connection lost" - so stop
-    // as soon as the response is complete, and only treat a lost connection as an error if
-    // it happened before then.
+    // Datajam's server drops the TLS connection abruptly after replying; readHttpResponse copes.
     const reader = socket.readable.getReader();
-    const chunks = [];
-    let total = 0;
-    for (;;) {
-      let step;
-      try {
-        step = await reader.read();
-      } catch (e) {
-        if (responseComplete(concatBytes(chunks, total))) break;
-        throw new ApiError(`Datajam ${endpoint}: connection lost`);
-      }
-      if (step.done) break;
-      chunks.push(step.value);
-      total += step.value.length;
-      if (responseComplete(concatBytes(chunks, total))) break;
+    try {
+      return await readHttpResponse(reader);
+    } catch (e) {
+      throw new ApiError(`Datajam ${endpoint}: ${e.message}`);
     }
-    return chunks;
   })();
   const timeout = new Promise((_, rej) => setTimeout(() => rej(new ApiError(`Datajam ${endpoint}: timed out`)), 60000));
-  let chunks;
+  let raw;
   try {
-    chunks = await Promise.race([read, timeout]);
+    raw = await Promise.race([read, timeout]);
   } finally {
     try { await socket.close(); } catch (_) { /* already closed */ }
   }
-
-  const raw = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
-  let off = 0;
-  for (const c of chunks) { raw.set(c, off); off += c.length; }
-  const { status, headers, bodyBytes } = parseHttpResponse(raw);
+  const { status, bodyBytes } = parseHttpResponse(raw);
   const text = new TextDecoder().decode(bodyBytes);
 
   if ([301, 302, 307, 308].includes(status)) throw new ApiError(`Datajam ${endpoint}: redirect (missing trailing slash?)`);
@@ -283,19 +331,50 @@ function headerEnd(raw) {
   return -1;
 }
 
-// True once a whole HTTP response (headers + Content-Length body, or a finished chunked body) is in.
-function responseComplete(raw) {
-  const end = headerEnd(raw);
-  if (end < 0) return false;
-  const head = new TextDecoder().decode(raw.subarray(0, end)).toLowerCase();
-  const body = raw.length - (end + 4);
-  const len = head.match(/\r\ncontent-length:\s*(\d+)/);
-  if (len) return body >= Number(len[1]);
-  if (head.includes("transfer-encoding: chunked")) {
-    const tail = new TextDecoder().decode(raw.subarray(Math.max(end + 4, raw.length - 7)));
-    return tail.endsWith("0\r\n\r\n");
+// Read one HTTP response from a socket reader and return its raw bytes. Only the header is
+// parsed once; after that each new piece costs O(1) to check, so large replies stay cheap.
+// If the server drops the connection after sending everything (Datajam does), that's fine.
+async function readHttpResponse(reader) {
+  const chunks = [];
+  let total = 0, headEndAt = -1, info = null;
+  const complete = () => {
+    if (headEndAt < 0) {
+      const prefix = concatBytes(chunks, total);
+      headEndAt = headerEnd(prefix);
+      if (headEndAt < 0) return false;
+      const head = new TextDecoder().decode(prefix.subarray(0, headEndAt)).toLowerCase();
+      const len = head.match(/\r\ncontent-length:\s*(\d+)/);
+      info = { len: len ? Number(len[1]) : null, chunked: head.includes("transfer-encoding: chunked") };
+    }
+    const body = total - (headEndAt + 4);
+    if (info.len !== null) return body >= info.len;
+    if (info.chunked) return body >= 5 && endsWith(chunks, body >= 7 ? "\r\n0\r\n\r\n" : "0\r\n\r\n");
+    return false;   // no length given: read until the server closes
+  };
+  for (;;) {
+    let step;
+    try {
+      step = await reader.read();
+    } catch (e) {
+      if (headEndAt >= 0 && complete()) break;
+      throw new Error("connection lost");
+    }
+    if (step.done) break;
+    chunks.push(step.value);
+    total += step.value.length;
+    if (complete()) break;
   }
-  return false;   // no length given: read until the server closes
+  return concatBytes(chunks, total);
+}
+
+function endsWith(chunks, str) {
+  const want = new TextEncoder().encode(str);
+  let i = want.length - 1;
+  for (let c = chunks.length - 1; c >= 0 && i >= 0; c--) {
+    const ch = chunks[c];
+    for (let j = ch.length - 1; j >= 0 && i >= 0; j--, i--) if (ch[j] !== want[i]) return false;
+  }
+  return i < 0;
 }
 
 function parseHttpResponse(raw) {
