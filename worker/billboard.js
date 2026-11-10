@@ -82,22 +82,26 @@ const SEED_CAMPAIGNS = [{
 
 let schemaReady = false;
 
+// Safe to run from several requests at once (the tab's first load fires three in parallel):
+// every statement is idempotent, so a race can't fail or seed twice.
 async function ensureSchema(env) {
   if (schemaReady) return;
   await env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)));
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM billboard_screens").first();
   if (n === 0) {
+    // INSERT OR IGNORE: a parallel request that already seeded a name (UNIQUE) just skips it.
     await env.DB.batch(SEED_SCREENS.map((s) => env.DB.prepare(
-      `INSERT INTO billboard_screens (name, location, navori_player_id, datajam_project, datajam_device,
+      `INSERT OR IGNORE INTO billboard_screens (name, location, navori_player_id, datajam_project, datajam_device,
          agreed_week_1_6, agreed_week_1_18) VALUES (?,?,?,?,?,?,?)`).bind(...s)));
     const { results } = await env.DB.prepare("SELECT id, name FROM billboard_screens").all();
     const idByName = Object.fromEntries(results.map((r) => [r.name, r.id]));
     const now = new Date().toISOString();
     await env.DB.batch(SEED_CAMPAIGNS.map((c) => env.DB.prepare(
       `INSERT INTO billboard_campaigns (client_name, start_date, end_date, screen_ids, artworks, share_of_voice,
-         created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`).bind(
+         created_by, created_at, updated_at)
+       SELECT ?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM billboard_campaigns WHERE client_name = ?)`).bind(
       c.client_name, c.start_date, c.end_date, JSON.stringify(c.screens.map((s) => idByName[s]).filter(Boolean)),
-      JSON.stringify(c.artworks), c.share_of_voice, "migrated", now, now)));
+      JSON.stringify(c.artworks), c.share_of_voice, "migrated", now, now, c.client_name)));
   }
   schemaReady = true;
 }
@@ -486,7 +490,8 @@ export async function handleBillboard(request, env, pathname) {
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status);
     console.error("billboard error", e);
-    return json({ error: "Something went wrong on the server." }, 500);
+    // Internal tool behind Cloudflare Access, so showing the message helps diagnose problems.
+    return json({ error: `Something went wrong on the server: ${String(e && e.message || e).slice(0, 300)}` }, 500);
   }
 }
 
