@@ -4,7 +4,7 @@
 // don't apply to this project (it's a Git-connected Worker with static assets,
 // not classic Cloudflare Pages).
 
-import { json, requireAccess, rowToJson } from "./utils.js";
+import { json, requireAccess, rowToJson, normaliseLoc } from "./utils.js";
 import { handleBillboard } from "./billboard.js";
 
 export default {
@@ -87,7 +87,15 @@ async function reconcileStatuses(env) {
   const today = `${get("year")}-${get("month")}-${get("day")}`;
 
   await env.DB.batch([
-    // ...and repair any that already got in (runs first, so the status rules below see real dates).
+    // "Swansea" became Quadrant Shopping Centre + Parc Tawe Retail Park: every campaign that was
+    // ticked Swansea is now ticked at both (archived ones too, so restoring them is right).
+    // One statement, safe to re-run, and a no-op once nothing says Swansea any more.
+    env.DB.prepare(
+      `UPDATE campaigns SET loc = REPLACE(loc, '"Swansea"', '"Quadrant Shopping Centre","Parc Tawe Retail Park"'),
+                            updated_at = datetime('now')
+       WHERE loc LIKE '%"Swansea"%'`
+    ),
+    // ...and repair any dates that already got in (runs first, so the status rules below see real dates).
     env.DB.prepare(`UPDATE campaigns SET start_date = '20' || substr(start_date, 3) WHERE start_date GLOB '00[0-9][0-9]-*'`),
     env.DB.prepare(`UPDATE campaigns SET end_date = '20' || substr(end_date, 3) WHERE end_date GLOB '00[0-9][0-9]-*'`),
     env.DB.prepare(`UPDATE marketing_calendar SET date = '20' || substr(date, 3) WHERE date GLOB '00[0-9][0-9]-*'`),
@@ -141,7 +149,7 @@ async function handleCreate(request, env) {
       id,
       body.n.trim(),
       body.s || "Agreed",
-      JSON.stringify(Array.isArray(body.loc) ? body.loc : []),
+      JSON.stringify(normaliseLoc(body.loc)),
       body.deal || null,
       body.rt || null,
       normaliseDate(body.start) || null,
@@ -184,7 +192,7 @@ async function handlePatch(request, env, id) {
   }
   if ("loc" in body) {
     sets.push("loc = ?");
-    values.push(JSON.stringify(Array.isArray(body.loc) ? body.loc : []));
+    values.push(JSON.stringify(normaliseLoc(body.loc)));
   }
   if (!sets.length) return json({ error: "no fields to update" }, 400);
 
@@ -217,7 +225,7 @@ async function handleReplaceAll(request, env) {
         typeof r.id === "string" && r.id ? r.id : crypto.randomUUID(),
         r.n,
         r.s || "Agreed",
-        JSON.stringify(Array.isArray(r.loc) ? r.loc : []),
+        JSON.stringify(normaliseLoc(r.loc)),
         r.deal || null,
         r.rt || null,
         normaliseDate(r.start) || null,

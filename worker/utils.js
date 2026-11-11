@@ -31,3 +31,15 @@ export function rowToJson(row) {
     deleted: !!row.deleted,
   };
 }
+
+// "Swansea" was split into two venues. Anything that still says Swansea (an old backup,
+// a browser tab that hasn't refreshed) is booked at both, so it can't re-enter the data.
+export const SWANSEA_VENUES = ["Quadrant Shopping Centre", "Parc Tawe Retail Park"];
+export function normaliseLoc(loc) {
+  if (!Array.isArray(loc)) return [];
+  const out = [];
+  for (const l of loc) {
+    for (const v of l === "Swansea" ? SWANSEA_VENUES : [l]) if (!out.includes(v)) out.push(v);
+  }
+  return out;
+}

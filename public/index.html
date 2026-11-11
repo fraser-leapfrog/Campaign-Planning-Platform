@@ -145,6 +145,9 @@
     font-size: 13.5px; color: var(--text-muted); background: transparent; border: none;
     padding: 10px 22px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 8px;
   }
+  /* Venue switchers carry long names ("Quadrant Shopping Centre"), so let them wrap on narrow screens */
+  .tabs.venue-tabs { flex-wrap: wrap; max-width: 100%; border-radius: var(--radius-l); }
+  @media (max-width: 560px) { .tabs.venue-tabs .tab-btn { padding: 9px 14px; font-size: 12.5px; } }
   .tab-btn .count { font-family: var(--font-body); font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 12px; opacity: .7; }
   .tab-btn[aria-selected="true"] { background: var(--purple); color: #fff; }
   .tab-btn[aria-selected="true"] .count { opacity: .85; }
@@ -489,6 +492,11 @@
 
   /* ---------- Page-level nav (Board / Analytics) ---------- */
   .page-nav { margin-bottom: 28px; }
+  /* Three top-level tabs: on a phone, share the row equally (labels wrap) instead of running off the edge */
+  @media (max-width: 560px) {
+    .tabs.page-nav { width: 100%; }
+    .tabs.page-nav .tab-btn { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; padding: 10px 6px; font-size: 12px; }
+  }
 
   /* ---------- Analytics ---------- */
   .range-row { display: flex; align-items: center; gap: 12px; margin: 28px 0 16px; flex-wrap: wrap; }
@@ -504,7 +512,7 @@
     .calendar-day { padding: 4px 3px 6px; min-height: 60px; }
     .calendar-entry { font-size: 10px; padding: 2px 4px; }
   }
-  .chart-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .chart-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .chart-card-head h2 {
     font-family: var(--font-head); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
     font-size: 13.5px; margin: 0; color: var(--text);
@@ -668,10 +676,7 @@
   </div>
 
   <div class="tabs-row">
-    <div class="tabs" role="tablist" id="tabs">
-      <button class="tab-btn" role="tab" data-loc="WMC" aria-selected="true">WMC <span class="count" id="count-wmc"></span></button>
-      <button class="tab-btn" role="tab" data-loc="Swansea" aria-selected="false">Swansea <span class="count" id="count-swansea"></span></button>
-    </div>
+    <div class="tabs venue-tabs" role="tablist" id="tabs"></div>
     <button class="btn btn-primary" id="add-btn">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       Add campaign
@@ -756,38 +761,12 @@
       <span class="chart-legend-item"><span class="chart-legend-swatch" data-kind="hold"></span>Hold with dates (unconfirmed)</span>
     </div>
 
-    <div class="analytics-grid">
-      <div class="chart-card">
-        <div class="chart-card-head">
-          <h2>WMC</h2>
-          <span class="chart-today" id="chart-today-WMC"></span>
-        </div>
-        <div class="chart-wrap">
-          <svg class="inv-chart" id="chart-svg-WMC" viewBox="0 0 640 220"></svg>
-          <div class="chart-tooltip" id="chart-tooltip-WMC" role="status" aria-live="polite"></div>
-        </div>
-        <p class="chart-flag" id="chart-flag-WMC"></p>
-      </div>
-      <div class="chart-card">
-        <div class="chart-card-head">
-          <h2>Swansea</h2>
-          <span class="chart-today" id="chart-today-Swansea"></span>
-        </div>
-        <div class="chart-wrap">
-          <svg class="inv-chart" id="chart-svg-Swansea" viewBox="0 0 640 220"></svg>
-          <div class="chart-tooltip" id="chart-tooltip-Swansea" role="status" aria-live="polite"></div>
-        </div>
-        <p class="chart-flag" id="chart-flag-Swansea"></p>
-      </div>
-    </div>
+    <div class="analytics-grid" id="analytics-grid"></div>
 
     <div class="chart-card report-card">
       <div class="chart-card-head">
         <h2>Weekly Occupancy</h2>
-        <div class="tabs report-tabs" id="report-tabs" role="tablist" aria-label="Venue">
-          <button class="tab-btn" role="tab" data-loc="WMC" aria-selected="true">WMC</button>
-          <button class="tab-btn" role="tab" data-loc="Swansea" aria-selected="false">Swansea</button>
-        </div>
+        <div class="tabs venue-tabs report-tabs" id="report-tabs" role="tablist" aria-label="Venue"></div>
       </div>
       <div class="range-row report-range-row">
         <span class="range-label">Window</span>
@@ -808,7 +787,7 @@
     <div class="page-head">
       <p class="eyebrow">Marketing Planner</p>
       <h1>Marketing Planner</h1>
-      <p>Leapfrog's own marketing — completely separate from the WMC/Swansea campaign board above. Jot ideas down, then pencil the actual plan onto the calendar.</p>
+      <p>Leapfrog's own marketing — completely separate from the Campaign Board above. Jot ideas down, then pencil the actual plan onto the calendar.</p>
     </div>
 
     <div class="chart-card idea-board-card">
@@ -871,10 +850,7 @@
 
       <div class="field">
         <span class="field-label">Location <span class="required-mark">*</span></span>
-        <div class="chip-group" id="location-group">
-          <button type="button" class="chip" data-value="WMC" aria-pressed="false">WMC</button>
-          <button type="button" class="chip" data-value="Swansea" aria-pressed="false">Swansea</button>
-        </div>
+        <div class="chip-group" id="location-group"></div>
       </div>
 
       <div class="field-row">
@@ -1128,8 +1104,7 @@
 
   const els = {
     tabs: document.getElementById('tabs'),
-    countWmc: document.getElementById('count-wmc'),
-    countSwansea: document.getElementById('count-swansea'),
+    analyticsGrid: document.getElementById('analytics-grid'),
     inventoryPanel: document.querySelector('.inventory-panel'),
     inventoryTitle: document.getElementById('inventory-title'),
     inventoryFigure: document.getElementById('inventory-figure'),
@@ -1206,7 +1181,19 @@
     ideaFNotes: document.getElementById('idea-f-notes'),
   };
 
-  const CAPACITY = { WMC: 9, Swansea: 18 };
+  // The venues. `key` is what's stored on each campaign (its `loc` list); `slug` is for element
+  // ids; `capacity` is its inventory slots. The tabs, location chips, analytics charts and weekly
+  // report are all built from this list, so adding or renaming a venue is a one-line change here
+  // (plus a data migration for any campaigns already ticked at the old name).
+  // Swansea was split into Quadrant Shopping Centre + Parc Tawe Retail Park; both keep the old
+  // Swansea capacity of 18, as every Swansea campaign is booked at both.
+  const LOCATIONS = [
+    { key: 'WMC', slug: 'wmc', capacity: 9 },
+    { key: 'Quadrant Shopping Centre', slug: 'quadrant', capacity: 18 },
+    { key: 'Parc Tawe Retail Park', slug: 'parc-tawe', capacity: 18 },
+  ];
+  const CAPACITY = Object.fromEntries(LOCATIONS.map(l => [l.key, l.capacity]));
+  const slugOf = (loc) => LOCATIONS.find(l => l.key === loc).slug;
 
   let activeLoc = 'WMC';
   let completedExpanded = false;
@@ -1471,7 +1458,7 @@
   }
 
   /* ---------- Analytics: inventory-over-time charts ---------- */
-  const ANALYTICS_LOCS = ['WMC', 'Swansea'];
+  const ANALYTICS_LOCS = LOCATIONS.map(l => l.key);
   const RANGE_DAYS = { '3m': 90, '6m': 180, '12m': 365 };
   const PAST_CUSHION = 14; // days of history shown before "today", regardless of window length
   let analyticsRangeKey = '6m';
@@ -1512,6 +1499,7 @@
   }
 
   function renderChart(loc, startDate, endDate) {
+    const slug = slugOf(loc);
     const capacity = CAPACITY[loc] || 0;
     const series = computeSeriesForLoc(loc, startDate, endDate);
     const totalDays = series.length - 1;
@@ -1585,17 +1573,17 @@
       svg += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)">${label}</text>`;
     }
     // Hover crosshair (hidden until pointer moves) + hit area
-    svg += `<g id="crosshair-${loc}" opacity="0">
+    svg += `<g id="crosshair-${slug}" opacity="0">
       <line x1="0" y1="${MT}" x2="0" y2="${MT + plotH}" stroke="var(--text-muted)" stroke-width="1" />
       <circle class="ch-ring" cx="0" cy="0" r="5.5" fill="var(--surface)" />
       <circle class="ch-dot" cx="0" cy="0" r="3.5" fill="var(--purple)" />
     </g>`;
-    svg += `<rect id="hit-${loc}" x="${ML}" y="0" width="${plotW}" height="${H}" fill="transparent" />`;
+    svg += `<rect id="hit-${slug}" x="${ML}" y="0" width="${plotW}" height="${H}" fill="transparent" />`;
 
-    const svgEl = document.getElementById(`chart-svg-${loc}`);
+    const svgEl = document.getElementById(`chart-svg-${slug}`);
     svgEl.innerHTML = svg;
 
-    const todayEl = document.getElementById(`chart-today-${loc}`);
+    const todayEl = document.getElementById(`chart-today-${slug}`);
     if (hasToday) {
       const todayPoint = series[todayIdx];
       const tv = todayPoint.v;
@@ -1607,17 +1595,17 @@
       todayEl.textContent = '';
     }
     const overDays = series.filter(p => p.v > capacity).length;
-    document.getElementById(`chart-flag-${loc}`).textContent = overDays
+    document.getElementById(`chart-flag-${slug}`).textContent = overDays
       ? `${overDays} day${overDays === 1 ? '' : 's'} over capacity in this window`
       : '';
 
     // Hover: crosshair snaps to nearest day; one tooltip carries date + value.
-    const hitRect = document.getElementById(`hit-${loc}`);
-    const crosshair = document.getElementById(`crosshair-${loc}`);
+    const hitRect = document.getElementById(`hit-${slug}`);
+    const crosshair = document.getElementById(`crosshair-${slug}`);
     const chLine = crosshair.querySelector('line');
     const chRing = crosshair.querySelector('.ch-ring');
     const chDot = crosshair.querySelector('.ch-dot');
-    const tooltip = document.getElementById(`chart-tooltip-${loc}`);
+    const tooltip = document.getElementById(`chart-tooltip-${slug}`);
 
     function handleMove(e) {
       const rect = svgEl.getBoundingClientRect();
@@ -1682,7 +1670,7 @@
   });
 
   // Board / Analytics — nested inside the Campaign Board tab, since both look at
-  // the same WMC/Swansea data (unlike Marketing Planner, which is unrelated).
+  // the same venue/campaign data (unlike Marketing Planner, which is unrelated).
   els.campaignSubtabs.addEventListener('click', (e) => {
     const btn = e.target.closest('.tab-btn');
     if (!btn) return;
@@ -1955,8 +1943,9 @@
 
   function updateTabCounts() {
     const all = getAllRows();
-    els.countWmc.textContent = `(${groupRows(all.filter(r => r.loc.includes('WMC'))).length})`;
-    els.countSwansea.textContent = `(${groupRows(all.filter(r => r.loc.includes('Swansea'))).length})`;
+    LOCATIONS.forEach(l => {
+      document.getElementById('count-' + l.slug).textContent = `(${groupRows(all.filter(r => r.loc.includes(l.key))).length})`;
+    });
     const deletedCount = getDeletedRows().length;
     els.archiveCount.textContent = deletedCount ? `(${deletedCount})` : '';
   }
@@ -2368,7 +2357,7 @@
   /* ---------- Marketing Planner ----------
      Completely separate from the campaign board/analytics above: its own tables
      (marketing_ideas, marketing_calendar) via /api/ideas and /api/marketing-calendar,
-     its own in-memory cache, its own modal. Nothing here reads WMC/Swansea data. */
+     its own in-memory cache, its own modal. Nothing here reads the venue/campaign data. */
   let IDEAS = [];
   let MKT_ROWS = [];
   let calendarMonth = (() => { const t = todayMidnight(); return new Date(t.getFullYear(), t.getMonth(), 1); })();
@@ -2675,7 +2664,52 @@
   /* ---------- Init ---------- */
   const POLL_MS = 20000; // background refresh so teammates' edits show up without a manual reload
 
+  // Builds everything that's per-venue from LOCATIONS (see the config near CAPACITY).
+  function buildLocationUI() {
+    els.tabs.innerHTML = '';
+    els.reportTabs.innerHTML = '';
+    els.locationGroup.innerHTML = '';
+    els.analyticsGrid.innerHTML = '';
+    LOCATIONS.forEach((l) => {
+      const tab = document.createElement('button');
+      tab.className = 'tab-btn'; tab.setAttribute('role', 'tab'); tab.dataset.loc = l.key;
+      tab.setAttribute('aria-selected', String(l.key === activeLoc));
+      tab.appendChild(document.createTextNode(l.key + ' '));
+      const count = document.createElement('span');
+      count.className = 'count'; count.id = 'count-' + l.slug;
+      tab.appendChild(count);
+      els.tabs.appendChild(tab);
+
+      const rtab = document.createElement('button');
+      rtab.className = 'tab-btn'; rtab.setAttribute('role', 'tab'); rtab.dataset.loc = l.key;
+      rtab.setAttribute('aria-selected', String(l.key === reportLoc));
+      rtab.textContent = l.key;
+      els.reportTabs.appendChild(rtab);
+
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'chip'; chip.dataset.value = l.key;
+      chip.setAttribute('aria-pressed', 'false'); chip.textContent = l.key;
+      els.locationGroup.appendChild(chip);
+
+      const card = document.createElement('div');
+      card.className = 'chart-card';
+      card.innerHTML = `
+        <div class="chart-card-head">
+          <h2></h2>
+          <span class="chart-today" id="chart-today-${l.slug}"></span>
+        </div>
+        <div class="chart-wrap">
+          <svg class="inv-chart" id="chart-svg-${l.slug}" viewBox="0 0 640 220"></svg>
+          <div class="chart-tooltip" id="chart-tooltip-${l.slug}" role="status" aria-live="polite"></div>
+        </div>
+        <p class="chart-flag" id="chart-flag-${l.slug}"></p>`;
+      card.querySelector('h2').textContent = l.key;
+      els.analyticsGrid.appendChild(card);
+    });
+  }
+
   async function init() {
+    buildLocationUI();
     els.refStart.value = isoDate(refStart);
     els.refEnd.value = isoDate(refEnd);
     els.todayBtn.disabled = true;
