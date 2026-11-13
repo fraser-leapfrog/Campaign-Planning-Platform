@@ -65,7 +65,7 @@ function popUps() {
     && (!firstLoad || Date.now() - Date.parse(n.created_at) < 3600e3));
   for (const n of fresh.slice(0, 3)) {
     try {
-      const p = new Notification(n.title, { body: n.body, tag: `leapfrog-${n.id}`, icon: "/billboard/logo.png" });
+      const p = new Notification(n.title, { body: n.body, tag: `leapfrog-${n.id}`, icon: "/icon.png" });
       p.onclick = () => { window.focus(); go(n); p.close(); };
     } catch (_) { /* pop-ups unsupported here */ }
   }

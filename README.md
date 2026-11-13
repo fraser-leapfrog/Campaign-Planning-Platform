@@ -1,4 +1,6 @@
-# Leapfrog Campaign Board — internal deploy (GitHub + Cloudflare Workers)
+# The Pond: Leapfrog Advertising's internal platform
+
+_The Pond_ is the platform's name (header, browser tab, favicon `public/icon.png`): Campaign Board, Marketing Planner and Billboard Reporting.
 
 A Cloudflare Worker (static assets + a small API + D1 database) showing the
 same Campaign Board, with shared, synced data instead of per-browser
