@@ -70,10 +70,8 @@ function buildSlides(model, photo) {
   const pages = [rows.slice(0, ROWS_FIRST_SLIDE)];
   for (let i = ROWS_FIRST_SLIDE; i < rows.length; i += ROWS_PER_SLIDE) pages.push(rows.slice(i, i + ROWS_PER_SLIDE));
   out.push(`<div class="slide detail">${header("Campaign Performance Detail")}
-    <div class="boxes n${agreed ? 4 : 3}">
-      ${agreed ? `<div class="tile"><div class="num">${agreed.agreed}</div><div class="label">Agreed Plays</div>
-          <div class="sub">${esc(agreed.pkg)} package · ${agreed.weekly} per week</div></div>
-        <div class="tile delivered"><div class="num">${fmtInt(t.plays)}</div><div class="label">Delivered Plays</div>
+    <div class="boxes n3">
+      ${agreed ? `<div class="tile delivered"><div class="num">${fmtInt(t.plays)}</div><div class="label">Delivered Plays</div>
           <div class="sub strong">${esc(agreed.versus)}</div></div>`
       : `<div class="tile"><div class="num">${fmtInt(t.plays)}</div><div class="label">Total Plays</div></div>`}
       <div class="tile"><div class="num">${fmtHM(t.airtime_s)}</div><div class="label">Total Time Played</div></div>

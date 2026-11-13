@@ -3,13 +3,24 @@
    Calibri (Carlito, its metric twin) for text, Arial for tables.
    Positions/sizes below were measured from "Swansea University - Campaign Report". */
 
+/* Digits only (0-9), from Source Sans 3. Carlito draws 6 and 8 about 4-5% taller than 0/4/5,
+   so numbers like 650,484 looked uneven; Source Sans 3's digits are all the same height and close
+   to Calibri's in shape. unicode-range means every letter still comes from Carlito/Calibri. */
+@font-face {
+  font-family: "Report Digits";
+  src: url("/billboard/fonts/source-sans-3-variable.woff2") format("woff2");
+  font-weight: 200 900;
+  font-display: block;
+  unicode-range: U+0030-0039;
+}
+
 :root {
   --plum: #2b1533;       /* titles */
   --deep: #510780;       /* big numbers, table header, period panel */
   --purple: #7a1ab5;     /* small labels */
   --mauve: #8b7797;      /* secondary labels, "Source" */
   --lavender: #eee0f5;   /* tiles, rule, table lines */
-  --font: "Calibri", "Carlito", "Helvetica Neue", Arial, sans-serif;
+  --font: "Report Digits", "Calibri", "Carlito", "Helvetica Neue", Arial, sans-serif;
   --table-font: Arial, "Helvetica Neue", sans-serif;
 }
 
