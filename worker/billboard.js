@@ -58,6 +58,11 @@ const SCHEMA = [
      data_url TEXT NOT NULL,
      updated_at TEXT NOT NULL
    )`,
+  // Campaign Board rows whose report to-do was deleted, so the board sync doesn't re-create it.
+  `CREATE TABLE IF NOT EXISTS billboard_board_dismissed (
+     board_id TEXT PRIMARY KEY,
+     dismissed_at TEXT NOT NULL
+   )`,
 ];
 
 // First-run data, copied from the local tool (Nov 2026). Agreed plays are per SCREEN per week;
@@ -83,7 +88,19 @@ const SEED_CAMPAIGNS = [{
 
 const ADDED_CAMPAIGN_COLUMNS = [
   ["show_agreed_line", "INTEGER NOT NULL DEFAULT 1"],   // agreed-per-day line on the plays chart
+  ["report_status", "TEXT NOT NULL DEFAULT 'to_do'"],   // 'to_do' | 'completed'
+  ["completed_at", "TEXT"],
+  ["completed_by", "TEXT"],
+  ["board_key", "TEXT"],                                // Campaign Board link (lowest board row id)
+  ["board_ids", "TEXT NOT NULL DEFAULT '[]'"],          // all board rows (a 1/6 booking is 3 rows)
 ];
+
+// Finished Campaign Board campaigns become report to-dos, starting with those that ended on or
+// after this date (earlier ones were already reported by hand). Change it to widen the backlog.
+const BOARD_SYNC_FROM = "2026-11-01";
+
+// Board venue -> words that identify its screens (matched against screen location + name).
+const VENUE_ALIASES = { wmc: ["wmc", "wales millennium centre"] };
 
 let schemaReady = false;
 
@@ -102,6 +119,8 @@ async function ensureSchema(env) {
       if (!/duplicate column/i.test(String(e))) throw e;   // a parallel request added it first
     }
   }
+  await env.DB.prepare(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_billboard_board_key ON billboard_campaigns(board_key)").run();
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM billboard_screens").first();
   if (n === 0) {
     // INSERT OR IGNORE: a parallel request that already seeded a name (UNIQUE) just skips it.
@@ -551,6 +570,7 @@ function campaignFromRow(r) {
     ...r, screen_ids: JSON.parse(r.screen_ids || "[]"), artworks: JSON.parse(r.artworks || "[]"),
     include_footfall: !!r.include_footfall, include_extra_pages: !!r.include_extra_pages,
     show_agreed_line: r.show_agreed_line === undefined ? true : !!r.show_agreed_line,
+    report_status: r.report_status || "to_do", board_ids: JSON.parse(r.board_ids || "[]"), from_board: !!r.board_key,
   };
 }
 
@@ -580,6 +600,106 @@ function cleanScreen(b) {
   }
   if (!!s.datajam_project !== !!s.datajam_device) throw new ApiError("Set both the Datajam project and JamBox, or neither", 400);
   return s;
+}
+
+// --------------------------------------------------------------------------- Campaign Board link
+// When a campaign on the Campaign Board finishes, it's marked Completed there and a report to-do is
+// created here (client, dates, screens from its venues, package from its rotation; artworks are
+// left for whoever writes the report). Runs whenever the Billboard campaign list is loaded.
+const normName = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+function levenshtein(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return d[a.length][b.length];
+}
+
+// "Platform" vs "Platfform", "SIX - Hello Starling" vs "Six Hello Starling": treat as the same client.
+function similarName(a, b) {
+  const x = normName(a), y = normName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (Math.min(x.length, y.length) >= 4 && (x.includes(y) || y.includes(x))) return true;
+  return levenshtein(x, y) <= 2;
+}
+
+function screensForVenues(screens, venues) {
+  const out = [];
+  for (const v of venues) {
+    const words = VENUE_ALIASES[String(v).toLowerCase()] || [String(v).toLowerCase()];
+    for (const sc of screens) {
+      if (!sc.active) continue;
+      const hay = `${sc.location} ${sc.name}`.toLowerCase();
+      if (words.some((w) => hay.includes(w)) && !out.includes(sc.id)) out.push(sc.id);
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+
+async function syncFromBoard(env) {
+  const today = todayLondon();
+  // Same rule as the board's own reconcileStatuses: a campaign whose end date has passed is Completed.
+  await env.DB.prepare(
+    `UPDATE campaigns SET status = 'Completed', updated_at = datetime('now')
+     WHERE end_date IS NOT NULL AND end_date < ?1 AND status != 'Completed'`).bind(today).run();
+
+  const { results: rows } = await env.DB.prepare(
+    `SELECT id, name, loc, rotation, start_date, end_date FROM campaigns
+     WHERE deleted = 0 AND start_date IS NOT NULL AND end_date IS NOT NULL AND end_date < ?1 AND end_date >= ?2`)
+    .bind(today, BOARD_SYNC_FROM).all();
+  if (!rows.length) return;
+
+  // A 1/6 booking is stored as three identical board rows (one per slot): one report per booking.
+  const groups = new Map();
+  for (const r of rows) {
+    let loc = [];
+    try { loc = JSON.parse(r.loc || "[]"); } catch (_) { /* bad JSON: no venues */ }
+    loc = [...new Set(loc)].sort();
+    const key = [normName(r.name), r.start_date, r.end_date, loc.join("|"), r.rotation || ""].join("#");
+    if (!groups.has(key)) groups.set(key, { name: String(r.name).trim(), start: r.start_date, end: r.end_date, loc, rotation: r.rotation, ids: [] });
+    groups.get(key).ids.push(r.id);
+  }
+
+  const { results: existing } = await env.DB.prepare(
+    "SELECT id, client_name, start_date, end_date, board_key, board_ids FROM billboard_campaigns").all();
+  const linked = new Set(existing.flatMap((c) => JSON.parse(c.board_ids || "[]")));
+  const keys = new Set(existing.map((c) => c.board_key).filter(Boolean));
+  const { results: dismissedRows } = await env.DB.prepare("SELECT board_id FROM billboard_board_dismissed").all();
+  const dismissed = new Set(dismissedRows.map((r) => r.board_id));
+  const { results: screens } = await env.DB.prepare("SELECT id, name, location, active FROM billboard_screens").all();
+
+  const now = new Date().toISOString();
+  const stmts = [];
+  for (const g of groups.values()) {
+    g.ids.sort();
+    const key = g.ids[0];
+    if (keys.has(key) || g.ids.some((id) => linked.has(id) || dismissed.has(id))) continue;
+    // A report someone already started by hand for the same client and dates: link it, don't duplicate.
+    const match = existing.find((c) => !c.board_key && similarName(c.client_name, g.name)
+      && c.start_date <= g.end && c.end_date >= g.start);
+    if (match) {
+      match.board_key = key;
+      stmts.push(env.DB.prepare(
+        "UPDATE billboard_campaigns SET board_key = ?, board_ids = ? WHERE id = ? AND board_key IS NULL")
+        .bind(key, JSON.stringify(g.ids), match.id));
+      continue;
+    }
+    const sov = ["1/6", "1/18"].includes(g.rotation) ? g.rotation : "";
+    stmts.push(env.DB.prepare(
+      `INSERT OR IGNORE INTO billboard_campaigns (client_name, start_date, end_date, screen_ids, artworks, share_of_voice,
+         include_footfall, include_extra_pages, show_agreed_line, notes, report_status, board_key, board_ids,
+         created_by, created_at, updated_at)
+       VALUES (?,?,?,?,'[]',?,1,1,1,?,'to_do',?,?,'campaign-board',?,?)`).bind(
+      g.name, g.start, g.end, JSON.stringify(screensForVenues(screens, g.loc)), sov,
+      `Added from the Campaign Board when it finished (${g.loc.join(", ") || "no venues"}).`,
+      key, JSON.stringify(g.ids), now, now));
+  }
+  if (stmts.length) await env.DB.batch(stmts);
 }
 
 // --------------------------------------------------------------------------- routes
@@ -658,6 +778,8 @@ async function route(request, env, path, email) {
 
   // ---- campaigns
   if (path === "/campaigns" && m === "GET") {
+    // A failed board sync shouldn't stop the list loading.
+    try { await syncFromBoard(env); } catch (e) { console.error("billboard board sync failed", e); }
     const { results } = await env.DB.prepare(
       `SELECT c.*, (p.campaign_id IS NOT NULL) AS has_photo FROM billboard_campaigns c
        LEFT JOIN billboard_photos p ON p.campaign_id = c.id ORDER BY c.start_date DESC, c.id DESC`).all();
@@ -691,12 +813,29 @@ async function route(request, env, path, email) {
       return json(campaignFromRow(r));
     }
     if (m === "DELETE") {
+      // If it came from the Campaign Board, remember that so the board sync doesn't bring it back.
+      const row = await env.DB.prepare("SELECT board_ids FROM billboard_campaigns WHERE id=?").bind(id).first();
+      const now = new Date().toISOString();
       await env.DB.batch([
+        ...JSON.parse((row && row.board_ids) || "[]").map((bid) => env.DB.prepare(
+          "INSERT OR IGNORE INTO billboard_board_dismissed (board_id, dismissed_at) VALUES (?, ?)").bind(bid, now)),
         env.DB.prepare("DELETE FROM billboard_campaigns WHERE id=?").bind(id),
         env.DB.prepare("DELETE FROM billboard_photos WHERE campaign_id=?").bind(id),
       ]);
       return json({ ok: true });
     }
+  }
+
+  // ---- report to-do status
+  if ((match = path.match(/^\/campaigns\/(\d+)\/report-status$/)) && m === "PUT") {
+    const { report_status } = await body();
+    if (!["to_do", "completed"].includes(report_status)) throw new ApiError("Unknown report status", 400);
+    const done = report_status === "completed";
+    const r = await env.DB.prepare(
+      `UPDATE billboard_campaigns SET report_status = ?, completed_at = ?, completed_by = ? WHERE id = ? RETURNING *`)
+      .bind(report_status, done ? new Date().toISOString() : null, done ? email : null, Number(match[1])).first();
+    if (!r) throw new ApiError("Campaign not found", 404);
+    return json(campaignFromRow(r));
   }
 
   // ---- campaign photo (optional, one per campaign; resized in the browser before upload)

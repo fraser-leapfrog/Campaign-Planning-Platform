@@ -46,7 +46,7 @@ function buildSlides(model, photo) {
   } else {
     headline = { value: fmtInt(t.plays), label: agreed ? "Delivered Plays" : "Total Plays", source: "Navori proof-of-play",
       rows: model.byScreen().map((r) => ({ value: fmtInt(r.plays), name: r.screen })),
-      sub: agreed ? `Agreed: ${agreed.agreed} (${agreed.pkg}) · ${agreed.versus}` : "" };
+      sub: agreed ? agreed.versus : "" };   // e.g. "+80% above agreed" (no agreed figure on the report)
   }
   headline.rows = headline.rows.slice(0, 4);
   out.push(`<div class="slide cover${photo ? "" : " nophoto"}">

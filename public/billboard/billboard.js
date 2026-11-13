@@ -56,7 +56,21 @@ async function init() {
     $("bb-reports").innerHTML = `<div class="bb-banner">Couldn't load Billboard Reporting: ${esc(e.message)}</div>`;
     return;
   }
-  select(state.campaigns[0] ? state.campaigns[0].id : "new");
+  select(firstCampaignId());
+}
+
+// The first report still to do (oldest finished first), else the most recent campaign.
+function firstCampaignId() {
+  const todo = sortedCampaigns().todo;
+  return todo[0] ? todo[0].id : state.campaigns[0] ? state.campaigns[0].id : "new";
+}
+
+function sortedCampaigns() {
+  const todo = state.campaigns.filter((c) => c.report_status !== "completed")
+    .sort((a, b) => a.end_date.localeCompare(b.end_date) || a.id - b.id);
+  const done = state.campaigns.filter((c) => c.report_status === "completed")
+    .sort((a, b) => String(b.completed_at || "").localeCompare(String(a.completed_at || "")) || b.id - a.id);
+  return { todo, done };
 }
 
 // ----------------------------------------------------------------------------- helpers
@@ -114,16 +128,25 @@ function banner() {
 }
 
 function renderReports() {
-  const list = state.campaigns.length ? state.campaigns.map((c) => `
-    <button type="button" class="bb-item" data-act="select" data-id="${c.id}" aria-current="${c.id === state.selected}">
+  const item = (c) => `
+    <button type="button" class="bb-item${c.report_status === "completed" ? " done" : ""}" data-act="select" data-id="${c.id}" aria-current="${c.id === state.selected}">
       <div class="bb-item-name">${esc(c.client_name)}</div>
       <div class="bb-item-meta">${esc(niceDate(c.start_date))} – ${esc(niceDate(c.end_date))}${c.share_of_voice ? ` · ${esc(c.share_of_voice)}` : ""}</div>
-    </button>`).join("") : `<div class="bb-empty">No campaigns yet.</div>`;
+      <div class="bb-tags">${c.from_board ? `<span class="bb-tag">From Campaign Board</span>` : ""}
+        ${c.report_status !== "completed" && !c.artworks.length ? `<span class="bb-tag warn">Pick artworks</span>` : ""}
+        ${c.report_status !== "completed" && c.end_date >= today() ? `<span class="bb-tag">Still running</span>` : ""}</div>
+    </button>`;
+  const { todo, done } = sortedCampaigns();
+  const list = `
+    <div class="bb-group-head">To do <span class="bb-count">${todo.length}</span></div>
+    ${todo.map(item).join("") || `<div class="bb-empty">Nothing to do. Finished campaigns from the Campaign Board appear here.</div>`}
+    <div class="bb-group-head">Completed <span class="bb-count">${done.length}</span></div>
+    ${done.map(item).join("") || `<div class="bb-empty">No completed reports yet.</div>`}`;
 
   $("bb-reports").innerHTML = `${banner()}
     <div class="bb-layout">
       <div class="chart-card">
-        <div class="chart-card-head"><h2>Campaigns</h2>
+        <div class="chart-card-head"><h2>Reports</h2>
           <button type="button" class="btn btn-primary" data-act="new">New</button></div>
         <div class="bb-list">${list}</div>
       </div>
@@ -142,7 +165,8 @@ function editorHtml() {
   const f = state.form;
   const screens = state.screens.filter((s) => s.active || f.screen_ids.includes(s.id));
   return `
-    <div class="chart-card-head"><h2>${f.id ? "Campaign" : "New campaign"}</h2></div>
+    <div class="chart-card-head"><h2>${f.id ? "Campaign" : "New campaign"}</h2>${f.id ? statusHtml() : ""}</div>
+    ${f.from_board ? `<p class="field-hint" style="margin:-4px 0 12px">Added from the Campaign Board when it finished. Check the screens and package, tick the artworks, save, then fetch the numbers.</p>` : ""}
     <form id="bb-form" onsubmit="return false" style="display:flex; flex-direction:column; gap:16px">
       <div class="field">
         <label class="field-label" for="bb-client">Client name <span class="required-mark">*</span></label>
@@ -199,6 +223,29 @@ function editorHtml() {
         <span class="bb-msg" id="bb-save-msg"></span>
       </div>
     </form>`;
+}
+
+function statusHtml() {
+  const c = savedCampaign();
+  if (!c) return "";
+  return c.report_status === "completed"
+    ? `<div class="bb-status"><span class="bb-pill done">Report completed${c.completed_at ? ` ${esc(niceDate(c.completed_at.slice(0, 10)))}` : ""}</span>
+        <button type="button" class="btn btn-ghost" data-act="report-status" data-status="to_do">Move back to to-do</button></div>`
+    : `<div class="bb-status"><span class="bb-pill">To do</span>
+        <button type="button" class="btn btn-primary" data-act="report-status" data-status="completed">Mark report completed</button></div>`;
+}
+
+async function setReportStatus(status) {
+  const c = savedCampaign();
+  try {
+    const r = await api(`/campaigns/${c.id}/report-status`, { method: "PUT", body: { report_status: status } });
+    Object.assign(c, { report_status: r.report_status, completed_at: r.completed_at, completed_by: r.completed_by });
+    Object.assign(state.form, { report_status: r.report_status, completed_at: r.completed_at });
+    const keep = { photo: state.photo, data: state.data, art: state.art, filter: state.filter };
+    renderReports();
+    Object.assign(state, keep);
+    renderArtworks(); renderPhoto(); renderResults(); updateSaveState();
+  } catch (e) { setMsg("bb-save-msg", e.message, true); }
 }
 
 function updateSaveState() {
@@ -419,7 +466,7 @@ async function deleteCampaign() {
   try {
     await api(`/campaigns/${f.id}`, { method: "DELETE" });
     state.campaigns = state.campaigns.filter((c) => c.id !== f.id);
-    select(state.campaigns[0] ? state.campaigns[0].id : "new");
+    select(firstCampaignId());
   } catch (e) { setMsg("bb-save-msg", e.message, true); }
 }
 
@@ -560,6 +607,7 @@ function onClick(e) {
       break;
     case "art-none": f.artworks = []; renderArtworks(); updateSaveState(); break;
     case "save": saveCampaign(); break;
+    case "report-status": setReportStatus(el.dataset.status); break;
     case "delete": deleteCampaign(); break;
     case "photo-remove":
       api(`/campaigns/${f.id}/photo`, { method: "DELETE" }).then(() => {
