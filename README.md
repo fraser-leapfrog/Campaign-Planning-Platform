@@ -228,3 +228,27 @@ browser's print window: choose *Save as PDF* (Chrome/Edge). The file name is fil
 ```bash
 wrangler dev --local --env-file ~/Downloads/leapfrog-campaign-reports/.env --var DEV_LOCAL_EMAIL:local-test
 ```
+
+---
+
+## Notifications (bell in the top bar)
+
+`worker/notifications.js` creates notifications; `public/notifications/` shows them. Each notification has a unique
+key so it's only created once; read/unread is per person (Access email). Click one to open the campaign on the
+board, the report in Billboard Reporting, or the Billboard Screens tab. "Turn on pop-ups" in the panel enables
+browser pop-ups while the app is open.
+
+| Notification | When |
+|---|---|
+| New report to do | a finished board campaign became a Billboard report to-do |
+| Report overdue | a report is still to-do 7 days after its campaign ended |
+| Goes live tomorrow / Do the proofs / Ends tomorrow | a booking starts tomorrow / starts today / ends tomorrow ("To Hold" excluded) |
+| Artwork still missing | starts within 3 days and still "Awaiting Artwork" / "Awaiting Approval" |
+| On hold 7+ days | "To Hold" for 7+ days (hold start = first seen on hold; its last edit for older holds) |
+| Overbooked | confirmed slots above a venue's capacity (WMC 9, Quadrant 18, Parc Tawe 18; keep `CAPACITY` in step with `LOCATIONS`) |
+| Screen offline / back online | a Navori player hasn't checked in for 2+ hours |
+| JamBox offline / back online | a JamBox in use is Disabled or not seen for 24+ hours |
+| Behind on plays | once each morning (after 08:00 UK): a live report with artworks and a package is behind its agreed pace; at most every 3 days |
+
+Campaign rules run whenever someone loads the app (cheap: database only) and every 15 minutes on the Cloudflare
+schedule (`[triggers]` in `wrangler.toml`), which also runs the Navori/Datajam checks.

@@ -917,3 +917,7 @@ async function route(request, env, path, email) {
 
   throw new ApiError("Not found", 404);
 }
+
+// Shared with worker/notifications.js (screen/JamBox/under-delivery checks and report to-dos).
+export { ensureSchema, syncFromBoard, Navori, datajamGet, fetchCampaignData, todayLondon, addDays, daysBetween,
+  campaignFromRow, screenFromRow };

@@ -10,3 +10,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "leapfrog_campaigns"
 database_id = "7eafecaa-e354-4182-a438-b3327006c591"
+
+# Notifications: every 15 minutes check screens/JamBoxes and campaign rules (worker/notifications.js)
+[triggers]
+crons = ["*/15 * * * *"]

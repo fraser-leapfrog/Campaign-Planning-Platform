@@ -6,6 +6,7 @@
 
 import { json, requireAccess, rowToJson, normaliseLoc } from "./utils.js";
 import { handleBillboard } from "./billboard.js";
+import { handleNotifications, runScheduledChecks } from "./notifications.js";
 
 export default {
   async fetch(request, env) {
@@ -55,10 +56,20 @@ export default {
     const billboard = await handleBillboard(request, env, pathname);
     if (billboard) return billboard;
 
+    // Notifications — the bell in the top bar (worker/notifications.js).
+    const notes = await handleNotifications(request, env, pathname);
+    if (notes) return notes;
+
     if (pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
 
     // Anything that isn't an API route is a static asset (index.html, fonts, logo).
     return env.ASSETS.fetch(request);
+  },
+
+  // Every 15 minutes (wrangler.toml [triggers]): notification rules plus the screen, JamBox and
+  // daily under-delivery checks that need Navori/Datajam.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runScheduledChecks(env));
   },
 };
 

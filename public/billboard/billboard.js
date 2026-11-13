@@ -38,10 +38,31 @@ async function api(path, opts = {}) {
 }
 
 // ----------------------------------------------------------------------------- entry
+let ready = null;
 export function show() {
-  if (!state.loaded) init();
+  if (!state.loaded) ready = init();
+  return ready;
 }
-window.Billboard = { show };
+
+function showSub(sub) {
+  const btn = document.querySelector(`#bb-subtabs [data-bb="${sub}"]`);
+  if (btn && btn.getAttribute("aria-selected") !== "true") btn.click();
+}
+
+// Used by the notifications bell.
+async function openReport(id) {
+  window.LeapfrogBoard && window.LeapfrogBoard.showPage("billboard");
+  await show();
+  showSub("reports");
+  if (!state.campaigns.some((c) => c.id === Number(id))) state.campaigns = await api("/campaigns");
+  if (state.campaigns.some((c) => c.id === Number(id))) select(Number(id));
+}
+async function openScreens() {
+  window.LeapfrogBoard && window.LeapfrogBoard.showPage("billboard");
+  await show();
+  showSub("screens");
+}
+window.Billboard = { show, openReport, openScreens };
 
 async function init() {
   state.loaded = true;
