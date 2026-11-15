@@ -7,6 +7,7 @@
 import { json, requireAccess, rowToJson, normaliseLoc } from "./utils.js";
 import { handleBillboard } from "./billboard.js";
 import { handleNotifications, runScheduledChecks } from "./notifications.js";
+import { handleWebsite } from "./website.js";
 
 export default {
   async fetch(request, env) {
@@ -55,6 +56,10 @@ export default {
     // Billboard Reporting — client proof-of-play/footfall reports (own billboard_* tables).
     const billboard = await handleBillboard(request, env, pathname);
     if (billboard) return billboard;
+
+    // Website — analytics for leapfrogadvertising.com (worker/website.js, web_* tables).
+    const website = await handleWebsite(request, env, pathname);
+    if (website) return website;
 
     // Notifications — the bell in the top bar (worker/notifications.js).
     const notes = await handleNotifications(request, env, pathname);

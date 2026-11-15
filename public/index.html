@@ -687,6 +687,7 @@
     <button class="tab-btn" role="tab" data-page="campaign" aria-selected="true">Campaign Board</button>
     <button class="tab-btn" role="tab" data-page="marketing" aria-selected="false">Marketing Planner</button>
     <button class="tab-btn" role="tab" data-page="billboard" aria-selected="false">Billboard Reporting</button>
+    <button class="tab-btn" role="tab" data-page="website" aria-selected="false">Website</button>
   </div>
 
   <div id="view-campaign">
@@ -856,6 +857,20 @@
     </div>
     <div id="bb-reports"></div>
     <div id="bb-screens" hidden></div>
+  </div>
+
+  <!-- Website: analytics for leapfrogadvertising.com (visits, channels, sources, conversions).
+       Logic lives in /website/website.js; API in worker/website.js; data written by the website's own Worker. -->
+  <div id="view-website" hidden>
+    <div class="page-head">
+      <p class="eyebrow">Website</p>
+      <h1>Website</h1>
+      <p>leapfrogadvertising.com: how many people visit, where they come from, and which visits turn into enquiries and guide downloads.</p>
+    </div>
+    <div class="tabs sub-tabs" id="web-subtabs" role="tablist" aria-label="Website section">
+      <button class="tab-btn" role="tab" data-web="analytics" aria-selected="true">Analytics</button>
+    </div>
+    <div id="web-analytics"></div>
   </div>
 </main>
 
@@ -1690,10 +1705,12 @@
     els.viewCampaign.hidden = view !== 'campaign';
     els.viewMarketing.hidden = view !== 'marketing';
     document.getElementById('view-billboard').hidden = view !== 'billboard';
+    document.getElementById('view-website').hidden = view !== 'website';
     // Re-render whichever Campaign Board sub-view (Board/Analytics) is currently selected.
     if (view === 'campaign' && !els.viewAnalytics.hidden) updateAnalytics();
     if (view === 'marketing') updateMarketing();
     if (view === 'billboard' && window.Billboard) window.Billboard.show();
+    if (view === 'website' && window.Website) window.Website.show();
     document.title = `${btn.textContent.trim()} · The Pond`;
   });
 
@@ -2791,6 +2808,8 @@
 <link rel="stylesheet" href="/notifications/notifications.css" />
 <script type="module" src="/notifications/notifications.js"></script>
 <script type="module" src="/billboard/billboard.js"></script>
+<link rel="stylesheet" href="/website/website.css" />
+<script type="module" src="/website/website.js"></script>
 
 </body>
 </html>
