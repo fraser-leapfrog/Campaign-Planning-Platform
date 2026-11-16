@@ -34,7 +34,7 @@ function buildSlides(model, photo) {
   const c = model.campaign;
   const t = model.totals();
   const footfall = model.includeFootfall && t.impressions !== null;
-  const avd = model.agreedVsDelivered();
+  const avd = model.agreedForReport();   // null when "Show agreed plays" is off for this campaign
   const agreed = avd && { agreed: fmtInt(avd.agreed), weekly: fmtInt(avd.weekly), pkg: avd.package, versus: versusText(avd.ratio) };
   const out = [];
 

@@ -104,6 +104,11 @@ export function buildModel(raw) {
       return per.map((v, h) => ({ hour: h, avg: v / (days.length || 1) }));
     },
 
+    // Agreed figures for the client-facing report and CSV: null when "Show agreed plays" is off.
+    agreedForReport() {
+      return campaign.show_agreed === false ? null : m.agreedVsDelivered();
+    },
+
     agreedVsDelivered() {
       const sov = campaign.share_of_voice;
       if (!sov) return null;
@@ -192,7 +197,7 @@ const csvCell = (v) => {
 const toCsv = (rows) => rows.map((r) => r.map(csvCell).join(",")).join("\n") + "\n";
 
 export function summaryCsv(model) {
-  const sov = model.campaign.share_of_voice;
+  const sov = model.agreedForReport() ? model.campaign.share_of_voice : "";   // no agreed column when switched off
   const key = sov === "1/6" ? "agreed_week_1_6" : "agreed_week_1_18";
   const rate = Object.fromEntries(model.screens.map((s) => [s.name, sov ? s[key] : null]));
   const head = ["client", "screen", "location", "date"];

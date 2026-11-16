@@ -84,6 +84,8 @@
 #view-billboard table.bb-screens input, #view-billboard table.bb-screens select { height: 36px; }
 #view-billboard .bb-check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 #view-billboard .bb-check input { width: 16px; height: 16px; accent-color: var(--purple); }
+#view-billboard .bb-check.bb-sub { margin-left: 24px; }
+#view-billboard .bb-check.off { opacity: .45; cursor: default; }
 #view-billboard table.bb-screens [data-k="name"] { min-width: 150px; }
 #view-billboard table.bb-screens [data-k="location"] { min-width: 220px; }
 #view-billboard table.bb-screens select { min-width: 190px; }
