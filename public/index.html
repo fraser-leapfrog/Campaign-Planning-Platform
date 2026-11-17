@@ -571,7 +571,16 @@
   .idea-row:hover { border-color: var(--purple-2); }
   .idea-row-main { flex: 1; min-width: 0; }
   .idea-row-text { font-size: 13.5px; font-weight: 500; }
-  .idea-row-actions { flex: none; display: flex; gap: 6px; }
+  .idea-row-actions { flex: none; display: flex; gap: 6px; align-items: center; }
+  /* "Add to calendar" on each idea: same footprint as the icon buttons, plus a label. */
+  .idea-cal-btn {
+    height: 30px; padding: 0 10px; border-radius: var(--radius-s); border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--text-muted); cursor: pointer; display: inline-flex;
+    align-items: center; gap: 6px; font-family: var(--font-body); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  }
+  .idea-cal-btn:hover { color: var(--purple-2); border-color: var(--purple-2); }
+  @media (max-width: 560px) { .idea-cal-btn span { display: none; } .idea-cal-btn { width: 30px; padding: 0; justify-content: center; } }
+  .field-hint { font-weight: 400; color: var(--text-muted); font-size: 12px; }
   .idea-empty, .calendar-empty { font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
 
   .calendar-head { align-items: center; flex-wrap: wrap; row-gap: 10px; }
@@ -1028,19 +1037,23 @@
           <label class="field-label" for="mkt-f-type">Type</label>
           <select id="mkt-f-type">
             <option value="">— None —</option>
-            <option>Social Media</option>
             <option>Email</option>
-            <option>Event</option>
-            <option>Content</option>
-            <option>PPC/Paid Ads</option>
-            <option>SEO</option>
-            <option>Affiliate</option>
-            <option>PR</option>
+            <option>LinkedIn</option>
+            <option>Instagram</option>
           </select>
         </div>
         <div class="field">
           <label class="field-label" for="mkt-f-end-date">End date</label>
           <input type="date" id="mkt-f-end-date" />
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Pillar <span class="field-hint">— pick any that apply</span></span>
+        <div class="chip-group" id="mkt-pillar-group" role="group" aria-label="Pillar">
+          <button type="button" class="chip" data-value="People &amp; Community" aria-pressed="false">People &amp; Community</button>
+          <button type="button" class="chip" data-value="Marketing &amp; Advertising Insights" aria-pressed="false">Marketing &amp; Advertising Insights</button>
+          <button type="button" class="chip" data-value="Brand Growth &amp; Results" aria-pressed="false">Brand Growth &amp; Results</button>
         </div>
       </div>
 
@@ -1078,7 +1091,10 @@
         <textarea id="idea-f-notes" rows="6" placeholder="Build on this idea — angle, references, next steps…"></textarea>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-danger" id="idea-modal-delete">Delete</button>
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="btn btn-danger" id="idea-modal-delete">Delete</button>
+          <button type="button" class="btn btn-ghost" id="idea-modal-to-cal">Add to calendar</button>
+        </div>
         <div style="display:flex; gap:10px; margin-left:auto;">
           <button type="button" class="btn btn-ghost" id="idea-modal-cancel">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
@@ -1214,6 +1230,8 @@
     mktFType: document.getElementById('mkt-f-type'),
     mktFStatus: document.getElementById('mkt-f-status'),
     mktFNotes: document.getElementById('mkt-f-notes'),
+    mktPillarGroup: document.getElementById('mkt-pillar-group'),
+    ideaModalToCal: document.getElementById('idea-modal-to-cal'),
     ideaModalBackdrop: document.getElementById('idea-modal-backdrop'),
     ideaModalClose: document.getElementById('idea-modal-close'),
     ideaModalCancel: document.getElementById('idea-modal-cancel'),
@@ -1370,6 +1388,7 @@
   function iconSvg(name) {
     if (name === 'chevron') return '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     if (name === 'edit') return '<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M8.5 2.2 10.8 4.5 4.3 11 1.7 11.3 2 8.7 8.5 2.2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+    if (name === 'calendar') return '<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1.8" y="2.6" width="9.4" height="8.6" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M1.8 5.3h9.4M4.3 1.5v2.2M8.7 1.5v2.2M6.5 7v3M5 8.5h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
     if (name === 'trash') return '<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 3.8h8M5.2 3.8V2.5h2.6v1.3M4 3.8l.4 7h4.2l.4-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     return '';
   }
@@ -2482,6 +2501,14 @@
 
       const actions = document.createElement('div');
       actions.className = 'idea-row-actions';
+      const calBtn = document.createElement('button');
+      calBtn.type = 'button';
+      calBtn.className = 'idea-cal-btn';
+      calBtn.title = 'Add into the calendar';
+      calBtn.setAttribute('aria-label', 'Add idea into the calendar');
+      calBtn.innerHTML = iconSvg('calendar') + '<span>Add to calendar</span>';
+      calBtn.addEventListener('click', (e) => { e.stopPropagation(); addIdeaToCalendar(idea); });
+      actions.appendChild(calBtn);
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'icon-btn';
@@ -2552,6 +2579,20 @@
     } catch (err) {
       showToast('Could not save — try again');
     }
+  });
+
+  // Turn an idea into a calendar entry: opens "Pencil in a campaign" pre-filled with
+  // the idea's text and notes; you pick the date. The idea stays on the board.
+  function addIdeaToCalendar(idea) {
+    openMktModal({ mode: 'add', date: isoDate(todayMidnight()), name: idea.text, notes: idea.notes || '' });
+    els.mktModalTitle.textContent = 'Add idea to the calendar';
+    els.mktFDate.focus();
+  }
+  els.ideaModalToCal.addEventListener('click', () => {
+    const idea = IDEAS.find(i => i.id === editingIdeaId);
+    if (!idea) return;
+    closeIdeaModal();
+    addIdeaToCalendar(idea);
   });
 
   els.ideaModalDelete.addEventListener('click', async () => {
@@ -2644,16 +2685,42 @@
     renderCalendar();
   });
 
-  function openMktModal({ mode, date, row }) {
+  // Older entries can carry a type that's no longer offered (e.g. "Social Media" from
+  // the Notion import). Show it as an extra option so editing doesn't silently wipe it.
+  function setMktTypeOption(value) {
+    els.mktFType.querySelectorAll('option[data-legacy]').forEach(o => o.remove());
+    if (value && ![...els.mktFType.options].some(o => o.value === value)) {
+      const opt = document.createElement('option');
+      opt.value = value; opt.textContent = value + ' (old type)'; opt.dataset.legacy = 'true';
+      els.mktFType.appendChild(opt);
+    }
+    els.mktFType.value = value || '';
+  }
+  function setMktPillars(pillars) {
+    [...els.mktPillarGroup.querySelectorAll('.chip')].forEach(chip => {
+      chip.setAttribute('aria-pressed', String((pillars || []).includes(chip.dataset.value)));
+    });
+  }
+  function getMktPillars() {
+    return [...els.mktPillarGroup.querySelectorAll('.chip[aria-pressed="true"]')].map(c => c.dataset.value);
+  }
+  els.mktPillarGroup.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    chip.setAttribute('aria-pressed', String(chip.getAttribute('aria-pressed') !== 'true'));
+  });
+
+  function openMktModal({ mode, date, row, name, notes }) {
     editingMktId = mode === 'edit' ? row.id : null;
     els.mktModalTitle.textContent = mode === 'edit' ? 'Edit campaign' : 'Pencil in a campaign';
     els.mktModalDelete.style.display = mode === 'edit' ? '' : 'none';
-    els.mktFName.value = mode === 'edit' ? row.name : '';
+    els.mktFName.value = mode === 'edit' ? row.name : (name || '');
     els.mktFDate.value = mode === 'edit' ? row.date : date;
     els.mktFEndDate.value = (mode === 'edit' && row.end_date) || '';
-    els.mktFType.value = (mode === 'edit' && row.type) || '';
+    setMktTypeOption((mode === 'edit' && row.type) || '');
     els.mktFStatus.value = (mode === 'edit' && row.status) || '';
-    els.mktFNotes.value = (mode === 'edit' && row.notes) || '';
+    els.mktFNotes.value = mode === 'edit' ? (row.notes || '') : (notes || '');
+    setMktPillars(mode === 'edit' ? row.pillars : []);
     els.mktModalBackdrop.classList.add('open');
     els.mktFName.focus();
   }
@@ -2680,6 +2747,7 @@
       type: els.mktFType.value || null,
       status: els.mktFStatus.value || null,
       notes: els.mktFNotes.value.trim() || null,
+      pillars: getMktPillars(),
     };
     try {
       if (editingMktId) await patchMktRow(editingMktId, fields);
