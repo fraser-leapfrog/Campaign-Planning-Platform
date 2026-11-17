@@ -78,11 +78,25 @@ export function buildModel(raw) {
       })).sort((a, b) => b.impressions - a.impressions);
     },
 
-    byDay() {
+    // Per day for all screens, or just the given ones (the "split by screen" pages).
+    byDay(scr = screens) {
+      const ids = new Set(scr.map((s) => s.id));
       return days.map((d) => {
-        const mine = plays.filter((p) => p.date === d);
-        return { date: d, plays: sum(mine, "plays"), airtime_s: sum(mine, "airtime_s"), impressions: impressions(screens, [d]) };
+        const mine = plays.filter((p) => p.date === d && ids.has(p.screen_id));
+        return { date: d, plays: sum(mine, "plays"), airtime_s: sum(mine, "airtime_s"), impressions: impressions(scr, [d]) };
       });
+    },
+
+    // Screens grouped by the footfall sensor (JamBox) they share, e.g. WMC North/Middle/South.
+    footfallGroups() {
+      if (!includeFootfall) return [];
+      const groups = new Map();
+      for (const s of screens) {
+        if (!s.datajam_device) continue;
+        if (!groups.has(s.datajam_device)) groups.set(s.datajam_device, []);
+        groups.get(s.datajam_device).push(s);
+      }
+      return [...groups.entries()].map(([device, scr]) => ({ device, location: scr[0].location || scr[0].name, screens: scr }));
     },
 
     byScreenDay() {
@@ -97,8 +111,8 @@ export function buildModel(raw) {
       return out;
     },
 
-    hourlyProfile() {
-      const devices = new Set(screens.filter((s) => s.datajam_device).map((s) => s.datajam_device));
+    hourlyProfile(scr = screens) {
+      const devices = new Set(scr.filter((s) => s.datajam_device).map((s) => s.datajam_device));
       const per = Array(24).fill(0);
       for (const f of footfall) if (devices.has(f.device)) f.hours.forEach((v, h) => { per[h] += v; });
       return per.map((v, h) => ({ hour: h, avg: v / (days.length || 1) }));

@@ -102,12 +102,12 @@ const savedCampaign = () => state.campaigns.find((c) => c.id === state.form.id);
 
 function blankForm() {
   return { id: null, client_name: "", start_date: today(), end_date: addDays(today(), 27), screen_ids: [], artworks: [],
-    share_of_voice: "1/6", include_footfall: true, include_extra_pages: true, show_agreed: true, show_agreed_line: true, notes: "",
+    share_of_voice: "1/6", include_footfall: true, include_extra_pages: true, split_by_screen: false, show_agreed: true, show_agreed_line: true, notes: "",
     has_photo: false };
 }
 
 const FIELDS = ["client_name", "start_date", "end_date", "screen_ids", "artworks", "share_of_voice", "include_footfall",
-  "include_extra_pages", "show_agreed", "show_agreed_line", "notes"];
+  "include_extra_pages", "split_by_screen", "show_agreed", "show_agreed_line", "notes"];
 function isDirty() {
   const saved = savedCampaign();
   if (!saved) return true;
@@ -217,6 +217,8 @@ function editorHtml() {
         <span class="field-label">Report options</span>
         <label class="bb-check"><input type="checkbox" data-f="include_footfall" ${f.include_footfall ? "checked" : ""}/> Include footfall data (potential impressions)</label>
         <label class="bb-check"><input type="checkbox" data-f="include_extra_pages" ${f.include_extra_pages ? "checked" : ""}/> Include extra pages (daily performance, time of day)</label>
+        <label class="bb-check bb-sub${f.include_extra_pages ? "" : " off"}" id="bb-split"><input type="checkbox" data-f="split_by_screen"
+          ${f.split_by_screen ? "checked" : ""} ${f.include_extra_pages ? "" : "disabled"}/> Split those pages by screen (one daily page per screen; screens sharing a footfall sensor share a time-of-day page)</label>
         <label class="bb-check"><input type="checkbox" data-f="show_agreed" ${f.show_agreed !== false ? "checked" : ""}/> Show agreed plays (“% above agreed”, “Delivered Plays”, the agreed line and the CSV column)</label>
         <label class="bb-check bb-sub${f.show_agreed === false ? " off" : ""}" id="bb-agreed-line"><input type="checkbox" data-f="show_agreed_line"
           ${f.show_agreed_line !== false ? "checked" : ""} ${f.show_agreed === false ? "disabled" : ""}/> Show the agreed-plays line on the plays-per-day chart</label>
@@ -678,10 +680,11 @@ function onChange(e) {
   const k = t.dataset && t.dataset.f;
   if (k && t.type === "checkbox") {
     state.form[k] = t.checked;
-    if (k === "show_agreed") {   // the agreed line only makes sense with agreed plays switched on
-      const line = $("bb-agreed-line");
-      line.classList.toggle("off", !t.checked);
-      line.querySelector("input").disabled = !t.checked;
+    // Sub-options only apply when their parent is on: grey them out otherwise.
+    const sub = { show_agreed: "bb-agreed-line", include_extra_pages: "bb-split" }[k];
+    if (sub) {
+      $(sub).classList.toggle("off", !t.checked);
+      $(sub).querySelector("input").disabled = !t.checked;
     }
     updateSaveState();
   }

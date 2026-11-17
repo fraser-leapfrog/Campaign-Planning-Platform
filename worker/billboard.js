@@ -89,6 +89,7 @@ const SEED_CAMPAIGNS = [{
 const ADDED_CAMPAIGN_COLUMNS = [
   ["show_agreed_line", "INTEGER NOT NULL DEFAULT 1"],   // agreed-per-day line on the plays chart
   ["show_agreed", "INTEGER NOT NULL DEFAULT 1"],        // any agreed-plays figure on the report/CSV (master switch)
+  ["split_by_screen", "INTEGER NOT NULL DEFAULT 0"],    // extra pages: one daily page per screen, time of day per sensor
   ["report_status", "TEXT NOT NULL DEFAULT 'to_do'"],   // 'to_do' | 'completed'
   ["completed_at", "TEXT"],
   ["completed_by", "TEXT"],
@@ -572,6 +573,7 @@ function campaignFromRow(r) {
     include_footfall: !!r.include_footfall, include_extra_pages: !!r.include_extra_pages,
     show_agreed_line: r.show_agreed_line === undefined ? true : !!r.show_agreed_line,
     show_agreed: r.show_agreed === undefined ? true : !!r.show_agreed,
+    split_by_screen: !!r.split_by_screen,
     report_status: r.report_status || "to_do", board_ids: JSON.parse(r.board_ids || "[]"), from_board: !!r.board_key,
   };
 }
@@ -793,12 +795,12 @@ async function route(request, env, path, email) {
     const now = new Date().toISOString();
     const r = await env.DB.prepare(
       `INSERT INTO billboard_campaigns (client_name, start_date, end_date, screen_ids, artworks, share_of_voice,
-         include_footfall, include_extra_pages, show_agreed_line, show_agreed, notes, created_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`).bind(
+         include_footfall, include_extra_pages, show_agreed_line, show_agreed, split_by_screen, notes, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`).bind(
       c.client_name.trim(), c.start_date, c.end_date, JSON.stringify(c.screen_ids.map(Number)),
       JSON.stringify([...new Set(c.artworks)]), c.share_of_voice, c.include_footfall ? 1 : 0,
       c.include_extra_pages ? 1 : 0, c.show_agreed_line === false ? 0 : 1, c.show_agreed === false ? 0 : 1,
-      String(c.notes || ""), email, now, now).first();
+      c.split_by_screen ? 1 : 0, String(c.notes || ""), email, now, now).first();
     return json(campaignFromRow(r), 201);
   }
   if ((match = path.match(/^\/campaigns\/(\d+)$/))) {
@@ -808,12 +810,12 @@ async function route(request, env, path, email) {
       validateCampaign(c);
       const r = await env.DB.prepare(
         `UPDATE billboard_campaigns SET client_name=?, start_date=?, end_date=?, screen_ids=?, artworks=?,
-           share_of_voice=?, include_footfall=?, include_extra_pages=?, show_agreed_line=?, show_agreed=?, notes=?, updated_at=?
+           share_of_voice=?, include_footfall=?, include_extra_pages=?, show_agreed_line=?, show_agreed=?, split_by_screen=?, notes=?, updated_at=?
            WHERE id=? RETURNING *`).bind(
         c.client_name.trim(), c.start_date, c.end_date, JSON.stringify(c.screen_ids.map(Number)),
         JSON.stringify([...new Set(c.artworks)]), c.share_of_voice, c.include_footfall ? 1 : 0,
         c.include_extra_pages ? 1 : 0, c.show_agreed_line === false ? 0 : 1, c.show_agreed === false ? 0 : 1,
-        String(c.notes || ""), new Date().toISOString(), id).first();
+        c.split_by_screen ? 1 : 0, String(c.notes || ""), new Date().toISOString(), id).first();
       if (!r) throw new ApiError("Campaign not found", 404);
       return json(campaignFromRow(r));
     }

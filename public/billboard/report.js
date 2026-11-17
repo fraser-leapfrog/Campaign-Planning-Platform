@@ -83,29 +83,53 @@ function buildSlides(model, photo) {
     out.push(`<div class="slide continued">${header("Campaign Performance Detail (continued)")}${perfTable(p, sizeClass)}</div>`);
   }
 
-  // ---- optional extra slides
+  // ---- optional extra slides: daily performance + footfall by time of day, either for the whole
+  // campaign or (split_by_screen) one daily page per screen and one time-of-day page per footfall
+  // sensor. Screens that share a sensor (e.g. WMC North/Middle/South) share one time-of-day page.
   if (c.include_extra_pages) {
-    const days = model.byDay();
+    const showLine = avd && c.show_agreed_line !== false;   // per-campaign toggle
+    if (c.split_by_screen) {
+      for (const s of model.screens) {
+        const rate = showLine ? s[avd.key] : null;   // this screen's agreed plays per week
+        out.push(dailySlide(model, `Daily Performance: ${s.name}`, model.byDay([s]),
+          footfall && !!s.datajam_device, rate ? rate / 7 : null));
+      }
+      if (footfall) for (const g of model.footfallGroups()) {
+        out.push(timeOfDaySlide(model, `Footfall by Time of Day: ${g.location}`, g.screens));
+      }
+    } else {
+      out.push(dailySlide(model, "Daily Performance", model.byDay(), footfall, showLine ? avd.weekly / 7 : null));
+      if (footfall) out.push(timeOfDaySlide(model, "Footfall by Time of Day", model.screens));
+    }
+  }
+  return out.join("\n");
+}
+
+// Page 3: plays per day (with the optional agreed line), plus impressions per day when footfall is on.
+function dailySlide(model, title, days, footfall, agreedDay) {
     const labelEvery = Math.max(1, Math.ceil(days.length / (footfall ? 8 : 14)));
     const labels = days.map((d) => niceDate(d.date, { year: false }));
     const w = footfall ? 536 : 1130;
-    const agreedDay = avd && c.show_agreed_line !== false ? avd.weekly / 7 : null;   // per-campaign toggle
     const key = agreedDay ? `<span class="ref-key"><i></i>Agreed: ${fmtInt(agreedDay)} per day</span>` : "";
     const playsChart = columnChart(labels, days.map((d) => d.plays), { width: w, height: 440, labelEvery, axisFont: 14,
       refValue: agreedDay, title: "Plays per day" });
-    out.push(`<div class="slide">${header("Daily Performance")}
+    return `<div class="slide">${header(title)}
       ${footfall
         ? `<div class="panel left"><div class="cap">Plays per day${key}</div>${playsChart}</div>
            <div class="panel right"><div class="cap">Potential impressions per day</div>
            ${columnChart(labels, days.map((d) => d.impressions || 0), { width: w, height: 440, labelEvery, axisFont: 14, title: "Potential impressions per day" })}</div>`
         : `<div class="panel full"><div class="cap">Plays per day${key}</div>${playsChart}</div>`}
-      <div class="foot-source">Source: Navori${footfall ? " (plays), Datajam (impressions)" : ""}</div></div>`);
+      <div class="foot-source">Source: Navori${footfall ? " (plays), Datajam (impressions)" : ""}</div></div>`;
+}
 
-    if (footfall) {
-      const hourly = model.hourlyProfile();
+// Page 4: average impressions per hour, busiest hour/day, daily average, for the given screens' sensors.
+function timeOfDaySlide(model, title, screens) {
+      const days = model.byDay(screens);
+      const total = days.reduce((a, d) => a + (d.impressions || 0), 0);
+      const hourly = model.hourlyProfile(screens);
       const peakH = hourly.reduce((a, b) => (b.avg > a.avg ? b : a));
       const peakD = days.reduce((a, b) => ((b.impressions || 0) > (a.impressions || 0) ? b : a));
-      out.push(`<div class="slide">${header("Footfall by Time of Day")}
+      return `<div class="slide">${header(title)}
         <div class="panel wide"><div class="cap">Average potential impressions per hour</div>
           ${columnChart(hourly.map((h) => String(h.hour).padStart(2, "0")), hourly.map((h) => h.avg),
             { width: 790, height: 440, labelEvery: 2, axisFont: 14, title: "Average impressions per hour" })}</div>
@@ -114,13 +138,10 @@ function buildSlides(model, photo) {
             <div class="sub">${fmtInt(peakH.avg)} impressions on an average day</div></div>
           <div class="tile"><div class="num">${esc(niceDate(peakD.date, { year: false, dow: true }))}</div><div class="label">Busiest day</div>
             <div class="sub">${fmtInt(peakD.impressions)} impressions</div></div>
-          <div class="tile"><div class="num">${fmtInt(t.impressions / Math.max(days.length, 1))}</div><div class="label">Daily average</div>
+          <div class="tile"><div class="num">${fmtInt(total / Math.max(days.length, 1))}</div><div class="label">Daily average</div>
             <div class="sub">potential impressions per day</div></div>
         </div>
-        <div class="foot-source">Source: Datajam</div></div>`);
-    }
-  }
-  return out.join("\n");
+        <div class="foot-source">Source: Datajam</div></div>`;
 }
 
 async function main() {
