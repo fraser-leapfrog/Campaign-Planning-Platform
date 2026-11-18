@@ -327,16 +327,28 @@ async function handleIdeaDelete(request, env, id) {
 // Content pillars a calendar entry can belong to (several at once). Stored as a JSON array.
 const MARKETING_PILLARS = ["People & Community", "Marketing & Advertising Insights", "Brand Growth & Results"];
 
-// `pillars` was added after the first release: add the column to the existing table once.
+// Columns added after the first release: add them to the existing table once.
+//   pillars   — JSON array of MARKETING_PILLARS (multi-select)
+//   types     — JSON array of channels (Email / LinkedIn / Instagram, multi-select). Replaces the
+//               single `type` column, which is copied across once when `types` is first added.
+//   post_copy — the text that goes out with the post
+const MARKETING_ADDED_COLUMNS = ["pillars", "types", "post_copy"];
 let marketingSchemaReady = false;
 async function ensureMarketingSchema(env) {
   if (marketingSchemaReady) return;
   const cols = (await env.DB.prepare("PRAGMA table_info(marketing_calendar)").all()).results.map((r) => r.name);
-  if (!cols.includes("pillars")) {
+  for (const col of MARKETING_ADDED_COLUMNS) {
+    if (cols.includes(col)) continue;
     try {
-      await env.DB.prepare("ALTER TABLE marketing_calendar ADD COLUMN pillars TEXT").run();
+      await env.DB.prepare(`ALTER TABLE marketing_calendar ADD COLUMN ${col} TEXT`).run();
     } catch (e) {
-      if (!/duplicate column/i.test(String(e))) throw e; // a parallel request added it first
+      if (/duplicate column/i.test(String(e))) continue; // a parallel request added it (and backfills it)
+      throw e;
+    }
+    if (col === "types") {
+      await env.DB.prepare(
+        `UPDATE marketing_calendar SET types = json_array(type) WHERE type IS NOT NULL AND type != ''`
+      ).run();
     }
   }
   marketingSchemaReady = true;
@@ -348,21 +360,32 @@ function cleanPillars(v) {
   return out.length ? JSON.stringify(out) : null;
 }
 
+// Any short strings are kept (not just the three current channels), so an old Notion type
+// on an existing entry survives an edit unless it's unticked.
+function cleanTypes(v) {
+  if (!Array.isArray(v)) return null;
+  const out = [];
+  for (const t of v) {
+    if (typeof t === "string" && t.trim() && t.length <= 60 && !out.includes(t.trim())) out.push(t.trim());
+  }
+  return out.length ? JSON.stringify(out) : null;
+}
+
+function parseJsonList(v) {
+  try { const a = v ? JSON.parse(v) : []; return Array.isArray(a) ? a : []; } catch { return []; }
+}
+
 async function handleMarketingList(request, env) {
   const email = requireAccess(request);
   if (!email) return json({ error: "unauthorized" }, 401);
   await ensureMarketingSchema(env);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, name, date, end_date, type, status, notes, pillars
+    `SELECT id, name, date, end_date, types, status, notes, post_copy, pillars
      FROM marketing_calendar
      ORDER BY date`
   ).all();
-  return json(results.map((r) => {
-    let pillars = [];
-    try { pillars = r.pillars ? JSON.parse(r.pillars) : []; } catch { pillars = []; }
-    return { ...r, pillars };
-  }));
+  return json(results.map((r) => ({ ...r, types: parseJsonList(r.types), pillars: parseJsonList(r.pillars) })));
 }
 
 async function handleMarketingCreate(request, env) {
@@ -378,10 +401,11 @@ async function handleMarketingCreate(request, env) {
 
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO marketing_calendar (id, name, date, end_date, type, status, notes, pillars)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+    `INSERT INTO marketing_calendar (id, name, date, end_date, types, status, notes, post_copy, pillars)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
   )
-    .bind(id, body.name.trim(), normaliseDate(body.date), normaliseDate(body.end_date) || null, body.type || null, body.status || null, body.notes || null, cleanPillars(body.pillars))
+    .bind(id, body.name.trim(), normaliseDate(body.date), normaliseDate(body.end_date) || null, cleanTypes(body.types),
+      body.status || null, body.notes || null, body.post_copy || null, cleanPillars(body.pillars))
     .run();
 
   return json({ id }, 201);
@@ -393,7 +417,7 @@ async function handleMarketingPatch(request, env, id) {
 
   const body = await request.json();
   await ensureMarketingSchema(env);
-  const colByField = { name: "name", date: "date", end_date: "end_date", type: "type", status: "status", notes: "notes", pillars: "pillars" };
+  const colByField = { name: "name", date: "date", end_date: "end_date", types: "types", status: "status", notes: "notes", post_copy: "post_copy", pillars: "pillars" };
 
   const sets = [];
   const values = [];
@@ -402,6 +426,7 @@ async function handleMarketingPatch(request, env, id) {
     sets.push(`${col} = ?`);
     values.push(field === "date" || field === "end_date" ? normaliseDate(body[field])
       : field === "pillars" ? cleanPillars(body[field])
+      : field === "types" ? cleanTypes(body[field])
       : body[field]);
   }
   if (!sets.length) return json({ error: "no fields to update" }, 400);

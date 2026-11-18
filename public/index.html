@@ -580,7 +580,11 @@
   }
   .idea-cal-btn:hover { color: var(--purple-2); border-color: var(--purple-2); }
   @media (max-width: 560px) { .idea-cal-btn span { display: none; } .idea-cal-btn { width: 30px; padding: 0; justify-content: center; } }
-  .field-hint { font-weight: 400; color: var(--text-muted); font-size: 12px; }
+  .field-label .field-hint { font-weight: 400; font-size: 12px; }
+  /* Pencil-in modal: chip-group headings match the other labels, and rows get the same gap as single fields. */
+  #mkt-form span.field-label { font-weight: 500; font-size: 13.5px; color: var(--text); }
+  #mkt-form .field-row + .field, #mkt-form .field + .field-row, #mkt-form .field-row + .field-row { margin-top: 15px; }
+  .copy-count { float: right; font-weight: 400; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   .idea-empty, .calendar-empty { font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
 
   .calendar-head { align-items: center; flex-wrap: wrap; row-gap: 10px; }
@@ -1019,6 +1023,13 @@
           <input type="date" id="mkt-f-date" />
         </div>
         <div class="field">
+          <label class="field-label" for="mkt-f-end-date">End date</label>
+          <input type="date" id="mkt-f-end-date" />
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
           <label class="field-label" for="mkt-f-status">Status</label>
           <select id="mkt-f-status">
             <option value="">— None —</option>
@@ -1032,19 +1043,12 @@
         </div>
       </div>
 
-      <div class="field-row">
-        <div class="field">
-          <label class="field-label" for="mkt-f-type">Type</label>
-          <select id="mkt-f-type">
-            <option value="">— None —</option>
-            <option>Email</option>
-            <option>LinkedIn</option>
-            <option>Instagram</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label" for="mkt-f-end-date">End date</label>
-          <input type="date" id="mkt-f-end-date" />
+      <div class="field">
+        <span class="field-label">Type <span class="field-hint">— pick any that apply</span></span>
+        <div class="chip-group" id="mkt-type-group" role="group" aria-label="Type">
+          <button type="button" class="chip" data-value="Instagram" aria-pressed="false">Instagram</button>
+          <button type="button" class="chip" data-value="LinkedIn" aria-pressed="false">LinkedIn</button>
+          <button type="button" class="chip" data-value="Email" aria-pressed="false">Email</button>
         </div>
       </div>
 
@@ -1055,6 +1059,11 @@
           <button type="button" class="chip" data-value="Marketing &amp; Advertising Insights" aria-pressed="false">Marketing &amp; Advertising Insights</button>
           <button type="button" class="chip" data-value="Brand Growth &amp; Results" aria-pressed="false">Brand Growth &amp; Results</button>
         </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="mkt-f-copy">Post copy <span class="copy-count" id="mkt-copy-count"></span></label>
+        <textarea id="mkt-f-copy" rows="6" placeholder="The text that goes out with the post — caption, email body…"></textarea>
       </div>
 
       <div class="field">
@@ -1227,7 +1236,9 @@
     mktFName: document.getElementById('mkt-f-name'),
     mktFDate: document.getElementById('mkt-f-date'),
     mktFEndDate: document.getElementById('mkt-f-end-date'),
-    mktFType: document.getElementById('mkt-f-type'),
+    mktTypeGroup: document.getElementById('mkt-type-group'),
+    mktFCopy: document.getElementById('mkt-f-copy'),
+    mktCopyCount: document.getElementById('mkt-copy-count'),
     mktFStatus: document.getElementById('mkt-f-status'),
     mktFNotes: document.getElementById('mkt-f-notes'),
     mktPillarGroup: document.getElementById('mkt-pillar-group'),
@@ -2685,30 +2696,36 @@
     renderCalendar();
   });
 
-  // Older entries can carry a type that's no longer offered (e.g. "Social Media" from
-  // the Notion import). Show it as an extra option so editing doesn't silently wipe it.
-  function setMktTypeOption(value) {
-    els.mktFType.querySelectorAll('option[data-legacy]').forEach(o => o.remove());
-    if (value && ![...els.mktFType.options].some(o => o.value === value)) {
-      const opt = document.createElement('option');
-      opt.value = value; opt.textContent = value + ' (old type)'; opt.dataset.legacy = 'true';
-      els.mktFType.appendChild(opt);
-    }
-    els.mktFType.value = value || '';
-  }
-  function setMktPillars(pillars) {
-    [...els.mktPillarGroup.querySelectorAll('.chip')].forEach(chip => {
-      chip.setAttribute('aria-pressed', String((pillars || []).includes(chip.dataset.value)));
+  // Multi-select chip groups (Type, Pillar). Older entries can carry a type that's no
+  // longer offered (e.g. "Social Media" from the Notion import): it shows as an extra
+  // chip marked "(old type)" so saving doesn't silently wipe it — untick to drop it.
+  function setChips(group, values) {
+    group.querySelectorAll('.chip[data-legacy]').forEach(c => c.remove());
+    const known = [...group.querySelectorAll('.chip')].map(c => c.dataset.value);
+    (values || []).filter(v => !known.includes(v)).forEach(v => {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'chip'; chip.dataset.value = v; chip.dataset.legacy = 'true';
+      chip.textContent = v + ' (old type)';
+      group.appendChild(chip);
+    });
+    group.querySelectorAll('.chip').forEach(chip => {
+      chip.setAttribute('aria-pressed', String((values || []).includes(chip.dataset.value)));
     });
   }
-  function getMktPillars() {
-    return [...els.mktPillarGroup.querySelectorAll('.chip[aria-pressed="true"]')].map(c => c.dataset.value);
+  function getChips(group) {
+    return [...group.querySelectorAll('.chip[aria-pressed="true"]')].map(c => c.dataset.value);
   }
-  els.mktPillarGroup.addEventListener('click', (e) => {
+  [els.mktTypeGroup, els.mktPillarGroup].forEach(group => group.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
     chip.setAttribute('aria-pressed', String(chip.getAttribute('aria-pressed') !== 'true'));
-  });
+  }));
+
+  function updateCopyCount() {
+    const n = els.mktFCopy.value.length;
+    els.mktCopyCount.textContent = n ? `${n.toLocaleString('en-GB')} characters` : '';
+  }
+  els.mktFCopy.addEventListener('input', updateCopyCount);
 
   function openMktModal({ mode, date, row, name, notes }) {
     editingMktId = mode === 'edit' ? row.id : null;
@@ -2717,10 +2734,12 @@
     els.mktFName.value = mode === 'edit' ? row.name : (name || '');
     els.mktFDate.value = mode === 'edit' ? row.date : date;
     els.mktFEndDate.value = (mode === 'edit' && row.end_date) || '';
-    setMktTypeOption((mode === 'edit' && row.type) || '');
+    setChips(els.mktTypeGroup, mode === 'edit' ? row.types : []);
     els.mktFStatus.value = (mode === 'edit' && row.status) || '';
     els.mktFNotes.value = mode === 'edit' ? (row.notes || '') : (notes || '');
-    setMktPillars(mode === 'edit' ? row.pillars : []);
+    setChips(els.mktPillarGroup, mode === 'edit' ? row.pillars : []);
+    els.mktFCopy.value = (mode === 'edit' && row.post_copy) || '';
+    updateCopyCount();
     els.mktModalBackdrop.classList.add('open');
     els.mktFName.focus();
   }
@@ -2744,10 +2763,11 @@
       name,
       date: dateClean.value,
       end_date: endDateClean.value,
-      type: els.mktFType.value || null,
+      types: getChips(els.mktTypeGroup),
+      post_copy: els.mktFCopy.value.trim() || null,
       status: els.mktFStatus.value || null,
       notes: els.mktFNotes.value.trim() || null,
-      pillars: getMktPillars(),
+      pillars: getChips(els.mktPillarGroup),
     };
     try {
       if (editingMktId) await patchMktRow(editingMktId, fields);

@@ -34,10 +34,12 @@ CREATE TABLE IF NOT EXISTS marketing_calendar (
   name TEXT NOT NULL,
   date TEXT NOT NULL,                      -- 'YYYY-MM-DD'
   end_date TEXT,
-  type TEXT,                                -- 'Email' | 'LinkedIn' | 'Instagram' (older rows may hold Notion types)
+  type TEXT,                                -- legacy single type; superseded by `types` below
   status TEXT,                              -- e.g. 'Idea', 'Planning', 'Live', 'Completed' — optional
   notes TEXT,
   pillars TEXT,                             -- JSON array of content pillars (multi-select)
+  types TEXT,                               -- JSON array: Email / LinkedIn / Instagram (multi-select; replaces `type`)
+  post_copy TEXT,                           -- the text that goes out with the post
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
