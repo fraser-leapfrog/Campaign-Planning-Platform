@@ -7,6 +7,7 @@ const MUTED = "#8b7797";    // mauve axis labels
 const GRID = "#eee0f5";     // lavender hairlines
 const BASELINE = "#c9b3d8";
 const REF = "#e43f84";      // Leapfrog pink: agreed-plays line
+const PARTIAL = "#c4a1e0";  // lighter purple: a day still in progress ("today so far", client page)
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -36,7 +37,7 @@ function column(x, yTop, w, yBase, color) {
 }
 
 export function columnChart(labels, values, { width = 680, height = 220, labelEvery = 1, axisFont = 10,
-  refValue = null, title = "" } = {}) {
+  refValue = null, title = "", partialIndex = -1 } = {}) {
   const left = 12 + axisFont * 4, right = 8, top = 12, bottom = 14 + axisFont * 2;
   const plotW = width - left - right, plotH = height - top - bottom;
   const ticks = niceTicks(Math.max(0, ...values, refValue || 0));
@@ -54,7 +55,7 @@ export function columnChart(labels, values, { width = 680, height = 220, labelEv
   values.forEach((v, i) => {
     const x = left + i * slot + (slot - barW) / 2;
     const yTop = yMax ? yBase - (v / yMax) * plotH : yBase;
-    p.push(`<g><title>${esc(labels[i])}: ${Math.round(v).toLocaleString("en-GB")}</title>${column(x, yTop, barW, yBase, SERIES)}</g>`);
+    p.push(`<g><title>${esc(labels[i])}: ${Math.round(v).toLocaleString("en-GB")}</title>${column(x, yTop, barW, yBase, i === partialIndex ? PARTIAL : SERIES)}</g>`);
     if (i % labelEvery === 0) {
       p.push(`<text x="${(x + barW / 2).toFixed(1)}" y="${yBase + axisFont + 8}" text-anchor="middle" font-size="${axisFont}" fill="${MUTED}">${esc(labels[i])}</text>`);
     }

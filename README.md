@@ -233,6 +233,34 @@ wrangler dev --local --env-file ~/Downloads/leapfrog-campaign-reports/.env --var
 
 ---
 
+## Client links (live results for clients)
+
+Each Billboard report can have a **client link**: a password-protected, phone-friendly results page
+at `/client/<random token>`. Turn it on in the report's **Client link** card (Billboard Reporting tab).
+
+- **Freshness:** the Worker cron (every 15 min) refreshes each shared, running campaign about once an
+  hour and stores a cleaned copy in `billboard_snapshots`. Today's numbers are shown as "so far".
+  Clients never trigger a Navori/Datajam fetch. "Refresh numbers now" fetches immediately.
+- **Stops on the end date:** numbers never go past the campaign's end date; refreshing continues for
+  3 days after the end (late-syncing plays), then the page is frozen as "Final results".
+- **Agreed plays:** never shown as a number. Only "+X% above agreed" (complete days, rounded down), and
+  only when the campaign is above agreed and "Show agreed plays" is on.
+- **Artwork keywords:** "Also count artwork whose name contains" counts any artwork with that text in
+  its file name, so a report set up before launch picks up new creatives automatically.
+- **Security:** the password is stored as a PBKDF2 hash; sessions are an HttpOnly cookie signed with a
+  key kept in `billboard_settings`, and changing the password signs everyone out. 8 wrong passwords in
+  15 minutes locks the link for 15 minutes. The page can only load the files listed in `CLIENT_LIB`
+  (worker/share.js); everything else stays behind Access. No notes, Navori/Datajam ids or agreed
+  rates are sent to the client.
+- **Cloudflare Access (one-off setup):** the `/client` path needs its own Access application with a
+  **Bypass → Everyone** policy, otherwise clients get the team sign-in page. Zero Trust → Access →
+  Applications → Add → Self-hosted: domain `campaign-planning-platform.fraser-760.workers.dev`,
+  path `client`; policy action **Bypass**, include **Everyone**. (Add the same for
+  `pond.leapfrogadvertising.com/client` if that domain is set up later.)
+
+Code: `worker/share.js` (routes, snapshot, cron), `public/client/` (the page), Client link card in
+`public/billboard/billboard.js`.
+
 ## Notifications (bell in the top bar)
 
 `worker/notifications.js` creates notifications; `public/notifications/` shows them. Each notification has a unique

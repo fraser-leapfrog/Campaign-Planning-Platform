@@ -106,3 +106,12 @@
 #view-billboard .bb-pill { font-size: 12px; font-weight: 500; border-radius: 999px; padding: 4px 10px;
   background: color-mix(in srgb, var(--st-orange) 14%, var(--surface)); color: var(--st-orange); }
 #view-billboard .bb-pill.done { background: color-mix(in srgb, var(--st-green) 14%, var(--surface)); color: var(--st-green); }
+
+/* Client link card */
+#view-billboard .bb-tag.live { color: var(--purple); border-color: color-mix(in srgb, var(--purple) 40%, var(--line)); }
+#view-billboard .bb-share-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#view-billboard .bb-share-row input { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+#view-billboard .bb-share-new { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0 4px; padding: 10px 12px;
+  border-radius: var(--radius-m); background: color-mix(in srgb, var(--purple) 7%, var(--surface)); font-size: 14px; }
+#view-billboard .bb-share-new strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+#view-billboard .bb-share-new .field-hint { flex-basis: 100%; }

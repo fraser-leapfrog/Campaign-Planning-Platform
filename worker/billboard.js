@@ -90,6 +90,12 @@ const ADDED_CAMPAIGN_COLUMNS = [
   ["show_agreed_line", "INTEGER NOT NULL DEFAULT 1"],   // agreed-per-day line on the plays chart
   ["show_agreed", "INTEGER NOT NULL DEFAULT 1"],        // any agreed-plays figure on the report/CSV (master switch)
   ["split_by_screen", "INTEGER NOT NULL DEFAULT 0"],    // extra pages: one daily page per screen, time of day per sensor
+  ["artwork_keywords", "TEXT NOT NULL DEFAULT ''"],     // also count any artwork whose name contains one of these
+  // Client share link (worker/share.js): random token in the URL + PBKDF2 password hash.
+  ["share_token", "TEXT"],
+  ["share_password", "TEXT"],
+  ["share_enabled", "INTEGER NOT NULL DEFAULT 0"],
+  ["share_updated_at", "TEXT"],
   ["report_status", "TEXT NOT NULL DEFAULT 'to_do'"],   // 'to_do' | 'completed'
   ["completed_at", "TEXT"],
   ["completed_by", "TEXT"],
@@ -486,6 +492,10 @@ async function fetchCampaignData(env, campaign, screens, through) {
   const warnings = [];
   const navori = new Navori(env);
   const wanted = new Set(campaign.artworks);
+  // Keywords count any artwork whose name contains them (case-insensitive), so creatives uploaded
+  // after the report was set up (e.g. before launch) are included automatically.
+  const keywords = artworkKeywords(campaign);
+  const counts = (name) => wanted.has(name) || keywords.some((k) => String(name || "").toLowerCase().includes(k));
   const start = campaign.start_date;
 
   // ---- plays (Navori), per screen, in <=31-day chunks
@@ -497,7 +507,7 @@ async function fetchCampaignData(env, campaign, screens, through) {
     }
     for (const [cs, ce] of dateChunks(start, through, 31)) {
       for (const r of await navori.reportings([s.navori_player_id], cs, ce)) {
-        if (!wanted.has(r.ContentName)) continue;
+        if (!counts(r.ContentName)) continue;
         const d = String(r.Date || "").slice(0, 10);
         if (!ISO.test(d)) { warnings.push(`${s.name}: a row for '${r.ContentName}' had no date.`); continue; }
         const key = `${s.id}|${d}|${r.ContentName}`;
@@ -515,6 +525,11 @@ async function fetchCampaignData(env, campaign, screens, through) {
   const played = new Set(plays.map((p) => p.artwork));
   for (const a of [...wanted].sort()) {
     if (!played.has(a)) warnings.push(`Artwork '${a}' has no plays on the campaign screens between ${start} and ${through}.`);
+  }
+  for (const k of keywords) {
+    if (![...played].some((a) => a.toLowerCase().includes(k))) {
+      warnings.push(`No artwork containing '${k}' played on the campaign screens between ${start} and ${through}.`);
+    }
   }
 
   // ---- footfall (Datajam), each JamBox once
@@ -562,14 +577,20 @@ async function fetchCampaignData(env, campaign, screens, through) {
   return { plays, footfall, warnings };
 }
 
+// "Cariad, mortgage" -> ["cariad", "mortgage"]. At least 3 characters each, so a stray letter can't match everything.
+function artworkKeywords(c) {
+  return [...new Set(String(c.artwork_keywords || "").split(",").map((k) => k.trim().toLowerCase()).filter((k) => k.length >= 3))];
+}
+
 // --------------------------------------------------------------------------- rows <-> JSON
 function screenFromRow(r) {
   return { ...r, active: !!r.active };
 }
 
-function campaignFromRow(r) {
+function campaignFromRow(row) {
+  const { share_password, ...r } = row;   // the client password hash never leaves the server
   return {
-    ...r, screen_ids: JSON.parse(r.screen_ids || "[]"), artworks: JSON.parse(r.artworks || "[]"),
+    ...r, share_enabled: !!r.share_enabled, artwork_keywords: r.artwork_keywords || "", screen_ids: JSON.parse(r.screen_ids || "[]"), artworks: JSON.parse(r.artworks || "[]"),
     include_footfall: !!r.include_footfall, include_extra_pages: !!r.include_extra_pages,
     show_agreed_line: r.show_agreed_line === undefined ? true : !!r.show_agreed_line,
     show_agreed: r.show_agreed === undefined ? true : !!r.show_agreed,
@@ -583,7 +604,10 @@ function validateCampaign(c) {
   if (!ISO.test(c.start_date || "") || !ISO.test(c.end_date || "")) throw new ApiError("Start and end dates are required", 400);
   if (c.end_date < c.start_date) throw new ApiError("The end date is before the start date", 400);
   if (!Array.isArray(c.screen_ids) || !c.screen_ids.length) throw new ApiError("Pick at least one screen", 400);
-  if (!Array.isArray(c.artworks) || !c.artworks.length) throw new ApiError("Pick at least one artwork", 400);
+  if (!Array.isArray(c.artworks)) throw new ApiError("Bad artworks list", 400);
+  if (!c.artworks.length && !artworkKeywords(c).length) {
+    throw new ApiError("Tick at least one artwork, or add a name keyword (3+ letters) so new artwork is counted automatically", 400);
+  }
   if (!["1/6", "1/18", ""].includes(c.share_of_voice)) throw new ApiError("Unknown package", 400);
 }
 
@@ -795,12 +819,13 @@ async function route(request, env, path, email) {
     const now = new Date().toISOString();
     const r = await env.DB.prepare(
       `INSERT INTO billboard_campaigns (client_name, start_date, end_date, screen_ids, artworks, share_of_voice,
-         include_footfall, include_extra_pages, show_agreed_line, show_agreed, split_by_screen, notes, created_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`).bind(
+         include_footfall, include_extra_pages, show_agreed_line, show_agreed, split_by_screen, artwork_keywords, notes,
+         created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`).bind(
       c.client_name.trim(), c.start_date, c.end_date, JSON.stringify(c.screen_ids.map(Number)),
       JSON.stringify([...new Set(c.artworks)]), c.share_of_voice, c.include_footfall ? 1 : 0,
       c.include_extra_pages ? 1 : 0, c.show_agreed_line === false ? 0 : 1, c.show_agreed === false ? 0 : 1,
-      c.split_by_screen ? 1 : 0, String(c.notes || ""), email, now, now).first();
+      c.split_by_screen ? 1 : 0, String(c.artwork_keywords || "").trim(), String(c.notes || ""), email, now, now).first();
     return json(campaignFromRow(r), 201);
   }
   if ((match = path.match(/^\/campaigns\/(\d+)$/))) {
@@ -810,12 +835,12 @@ async function route(request, env, path, email) {
       validateCampaign(c);
       const r = await env.DB.prepare(
         `UPDATE billboard_campaigns SET client_name=?, start_date=?, end_date=?, screen_ids=?, artworks=?,
-           share_of_voice=?, include_footfall=?, include_extra_pages=?, show_agreed_line=?, show_agreed=?, split_by_screen=?, notes=?, updated_at=?
+           share_of_voice=?, include_footfall=?, include_extra_pages=?, show_agreed_line=?, show_agreed=?, split_by_screen=?, artwork_keywords=?, notes=?, updated_at=?
            WHERE id=? RETURNING *`).bind(
         c.client_name.trim(), c.start_date, c.end_date, JSON.stringify(c.screen_ids.map(Number)),
         JSON.stringify([...new Set(c.artworks)]), c.share_of_voice, c.include_footfall ? 1 : 0,
         c.include_extra_pages ? 1 : 0, c.show_agreed_line === false ? 0 : 1, c.show_agreed === false ? 0 : 1,
-        c.split_by_screen ? 1 : 0, String(c.notes || ""), new Date().toISOString(), id).first();
+        c.split_by_screen ? 1 : 0, String(c.artwork_keywords || "").trim(), String(c.notes || ""), new Date().toISOString(), id).first();
       if (!r) throw new ApiError("Campaign not found", 404);
       return json(campaignFromRow(r));
     }
@@ -828,6 +853,9 @@ async function route(request, env, path, email) {
           "INSERT OR IGNORE INTO billboard_board_dismissed (board_id, dismissed_at) VALUES (?, ?)").bind(bid, now)),
         env.DB.prepare("DELETE FROM billboard_campaigns WHERE id=?").bind(id),
         env.DB.prepare("DELETE FROM billboard_photos WHERE campaign_id=?").bind(id),
+        // Client link numbers (worker/share.js). The table may not exist yet on a fresh database.
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS billboard_snapshots (campaign_id INTEGER PRIMARY KEY, data TEXT, fetched_at TEXT, attempted_at TEXT, error TEXT)"),
+        env.DB.prepare("DELETE FROM billboard_snapshots WHERE campaign_id=?").bind(id),
       ]);
       return json({ ok: true });
     }

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="referrer" content="no-referrer" />
+<meta name="theme-color" content="#2b1533" />
+<title>Campaign results · Leapfrog Advertising</title>
+<link rel="icon" type="image/png" href="/client/lib/icon.png" />
+<link rel="apple-touch-icon" href="/client/lib/icon.png" />
+<link rel="stylesheet" href="/client/client.css" />
+</head>
+<body>
+  <!-- Client results page (one per shared Billboard report). The token is in the URL; the password
+       unlocks it. Numbers come from /client/api/<token>, refreshed about hourly by the Worker. -->
+  <header class="top">
+    <div class="wrap top-inner">
+      <img class="logo" src="/client/lib/logo.png" alt="Leapfrog Advertising" />
+      <div class="top-right" id="top-right"></div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app" aria-live="polite">
+    <div class="loading">Loading…</div>
+  </main>
+
+  <footer class="wrap foot" id="foot" hidden>
+    <p><strong>Plays</strong> and <strong>time on screen</strong> come from the screens' proof-of-play logs (Navori).
+      <strong>Potential impressions</strong> are people counted passing the screens by footfall sensors (Datajam).
+      Figures update about every hour; today's are partial until the day ends.</p>
+    <p>Leapfrog Advertising · only great locations, accessible for all businesses ·
+      <a href="https://www.leapfrogadvertising.com" rel="noopener">leapfrogadvertising.com</a>
+      · <button type="button" class="linklike" id="sign-out">Sign out</button></p>
+  </footer>
+
+  <script type="module" src="/client/client.js"></script>
+</body>
+</html>

@@ -8,10 +8,15 @@ import { json, requireAccess, rowToJson, normaliseLoc } from "./utils.js";
 import { handleBillboard } from "./billboard.js";
 import { handleNotifications, runScheduledChecks } from "./notifications.js";
 import { handleWebsite } from "./website.js";
+import { handleClient, handleShareAdmin, refreshDueShares } from "./share.js";
 
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+
+    // Client share pages (/client/*): public via an Access bypass, protected by the report's password.
+    const client = await handleClient(request, env, pathname);
+    if (client) return client;
 
     if (pathname === "/api/campaigns") {
       if (request.method === "GET") return handleList(request, env);
@@ -54,6 +59,8 @@ export default {
     }
 
     // Billboard Reporting — client proof-of-play/footfall reports (own billboard_* tables).
+    const share = await handleShareAdmin(request, env, pathname);   // client link settings
+    if (share) return share;
     const billboard = await handleBillboard(request, env, pathname);
     if (billboard) return billboard;
 
@@ -75,6 +82,7 @@ export default {
   // daily under-delivery checks that need Navori/Datajam.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runScheduledChecks(env));
+    ctx.waitUntil(refreshDueShares(env).catch((e) => console.error("client link refresh failed", e)));   // ~hourly per link
   },
 };
 

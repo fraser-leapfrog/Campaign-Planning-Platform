@@ -24,6 +24,7 @@ const state = {
   art: { key: null, list: [], loading: false, error: null }, filter: "",
   data: null,              // { id, updated_at, through, raw, model }
   sources: null, sourcesLoading: false,
+  share: null,             // { id, loading, busy, info, error, password (just set, shown once), editing }
 };
 
 async function api(path, opts = {}) {
@@ -102,11 +103,11 @@ const savedCampaign = () => state.campaigns.find((c) => c.id === state.form.id);
 
 function blankForm() {
   return { id: null, client_name: "", start_date: today(), end_date: addDays(today(), 27), screen_ids: [], artworks: [],
-    share_of_voice: "1/6", include_footfall: true, include_extra_pages: true, split_by_screen: false, show_agreed: true, show_agreed_line: true, notes: "",
+    artwork_keywords: "", share_of_voice: "1/6", include_footfall: true, include_extra_pages: true, split_by_screen: false, show_agreed: true, show_agreed_line: true, notes: "",
     has_photo: false };
 }
 
-const FIELDS = ["client_name", "start_date", "end_date", "screen_ids", "artworks", "share_of_voice", "include_footfall",
+const FIELDS = ["client_name", "start_date", "end_date", "screen_ids", "artworks", "artwork_keywords", "share_of_voice", "include_footfall",
   "include_extra_pages", "split_by_screen", "show_agreed", "show_agreed_line", "notes"];
 function isDirty() {
   const saved = savedCampaign();
@@ -130,8 +131,10 @@ function select(id) {
   state.photo = null;
   state.filter = "";
   state.data = null;
+  state.share = c ? { id: c.id, loading: true } : null;
   renderReports();
   loadArtworks();
+  if (c) loadShare(c.id);
   if (c && c.has_photo) {
     api(`/campaigns/${c.id}/photo`).then((r) => { if (state.form.id === c.id) { state.photo = r.data_url; renderPhoto(); } })
       .catch(() => {});
@@ -154,7 +157,8 @@ function renderReports() {
       <div class="bb-item-name">${esc(c.client_name)}</div>
       <div class="bb-item-meta">${esc(niceDate(c.start_date))} – ${esc(niceDate(c.end_date))}${c.share_of_voice ? ` · ${esc(c.share_of_voice)}` : ""}</div>
       <div class="bb-tags">${c.from_board ? `<span class="bb-tag">From Campaign Board</span>` : ""}
-        ${c.report_status !== "completed" && !c.artworks.length ? `<span class="bb-tag warn">Pick artworks</span>` : ""}
+        ${c.report_status !== "completed" && !c.artworks.length && !c.artwork_keywords ? `<span class="bb-tag warn">Pick artworks</span>` : ""}
+        ${c.share_enabled ? `<span class="bb-tag live">Client link on</span>` : ""}
         ${c.report_status !== "completed" && c.end_date >= today() ? `<span class="bb-tag">Still running</span>` : ""}</div>
     </button>`;
   const { todo, done } = sortedCampaigns();
@@ -173,11 +177,13 @@ function renderReports() {
       </div>
       <div style="display:flex; flex-direction:column; gap:18px; min-width:0">
         <div class="chart-card" id="bb-editor">${editorHtml()}</div>
+        <div class="chart-card" id="bb-share" ${state.form.id ? "" : "hidden"}></div>
         <div class="chart-card" id="bb-results" ${state.form.id ? "" : "hidden"}></div>
       </div>
     </div>`;
   renderArtworks();
   renderPhoto();
+  renderShare();
   renderResults();
   updateSaveState();
 }
@@ -233,6 +239,11 @@ function editorHtml() {
         </div>
         <div class="bb-art-list" id="bb-art-list"></div>
         <span class="field-hint" id="bb-art-hint"></span>
+      </div>
+      <div class="field">
+        <label class="field-label" for="bb-keywords">Also count artwork whose name contains</label>
+        <input type="text" id="bb-keywords" data-f="artwork_keywords" value="${esc(f.artwork_keywords || "")}" placeholder="e.g. Cariad" autocomplete="off" />
+        <span class="field-hint">Comma-separated, 3+ letters each. Any artwork with one of these in its file name counts, including artwork uploaded later. Handy when you set the report up before launch.</span>
       </div>
       <div class="field">
         <span class="field-label">Photo (optional)</span>
@@ -324,19 +335,186 @@ function renderArtworks() {
   const f = state.form;
   const { start, end, players } = artworkKey();
   const rows = visibleArtworks();
+  const kw = keywordList();
+  const byKeyword = (name) => kw.some((k) => name.toLowerCase().includes(k));
   el.innerHTML = rows.length ? rows.map((a) => `
     <label class="bb-art-row${a.plays === null ? " missing" : ""}">
       <input type="checkbox" data-art="${esc(a.artwork)}" ${f.artworks.includes(a.artwork) ? "checked" : ""}/>
-      <span class="name">${esc(a.artwork)}</span>
+      <span class="name">${esc(a.artwork)}${byKeyword(a.artwork) ? ` <span class="bb-tag live">counted by keyword</span>` : ""}</span>
       <span class="plays">${a.plays === null ? "no plays found" : `${fmtInt(a.plays)} plays`}</span>
     </label>`).join("")
     : `<div class="bb-empty">${state.art.loading ? "Loading artwork names from Navori…"
       : state.art.error ? esc(state.art.error) : !players.length ? "Pick screens first to see which artworks played on them."
       : state.filter ? "Nothing matches that filter." : "No plays found on these screens in this period."}</div>`;
-  $("bb-art-label").innerHTML = `Artworks <span class="required-mark">*</span> <span class="field-hint">(${f.artworks.length} selected)</span>`;
+  $("bb-art-label").innerHTML = `Artworks <span class="required-mark">*</span> <span class="field-hint">(${f.artworks.length} selected${kw.length ? ", plus keyword matches" : ""})</span>`;
   $("bb-art-hint").textContent = players.length
     ? `Artworks that played on the selected screens between ${niceDate(start)} and ${niceDate(end)}, most played first. Navori identifies artwork by file name, so tick every version used in this campaign.`
     : "";
+}
+
+// Same rule as the server (worker/billboard.js artworkKeywords).
+function keywordList() {
+  return [...new Set(String(state.form.artwork_keywords || "").split(",").map((k) => k.trim().toLowerCase()).filter((k) => k.length >= 3))];
+}
+
+// ---- client link (worker/share.js)
+async function loadShare(id) {
+  try {
+    const info = await api(`/campaigns/${id}/share`);
+    if (state.share && state.share.id === id) Object.assign(state.share, { loading: false, info, error: null });
+  } catch (e) {
+    if (state.share && state.share.id === id) Object.assign(state.share, { loading: false, error: e.message });
+  }
+  renderShare();
+}
+
+// Easy to read out or type: three groups of four, no look-alike characters (0/O, 1/l/I).
+function makePassword() {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const s = [...crypto.getRandomValues(new Uint32Array(12))].map((n) => chars[n % chars.length]).join("");
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}`;
+}
+
+const shareUrl = (info) => `${location.origin}${info.path}`;
+
+function agoText(isoTime) {
+  if (!isoTime) return "";
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(isoTime)) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const h = Math.round(mins / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+
+function renderShare() {
+  const el = $("bb-share");
+  if (!el || !state.form.id) return;
+  const sh = state.share || {};
+  const c = savedCampaign();
+  const head = (pill) => `<div class="chart-card-head"><h2>Client link</h2>${pill}</div>`;
+  if (sh.loading) { el.innerHTML = `${head("")}<p class="field-hint">Loading…</p>`; return; }
+  if (sh.error && !sh.info) { el.innerHTML = `${head("")}<p class="bb-msg error">${esc(sh.error)}</p>`; return; }
+  const info = sh.info || {};
+  const busy = sh.busy ? "disabled" : "";
+  const msg = `<span class="bb-msg${sh.msgError ? " error" : ""}" id="bb-share-msg">${sh.msg ? esc(sh.msg) : ""}</span>`;
+  const pwField = (label) => `
+    <div class="field" style="gap:4px"><label class="field-label" for="bb-share-pw">${label}</label>
+      <div class="bb-share-row"><input type="text" id="bb-share-pw" value="${esc(sh.draft || "")}" autocomplete="off" spellcheck="false" />
+        <button type="button" class="btn btn-ghost" data-act="share-gen" ${busy}>Generate</button></div></div>`;
+
+  if (!info.enabled) {
+    if (sh.draft === undefined) sh.draft = info.has_password ? "" : makePassword();
+    el.innerHTML = `${head(`<span class="bb-pill">Off</span>`)}
+      <p class="field-hint" style="margin-top:0">A live results page for the client, locked with a password. It updates about
+        every hour, includes today so far, and stops on the end date (${esc(niceDate(c.end_date))}). It never shows agreed
+        plays, only “% above agreed”, and only when you're above it.</p>
+      ${pwField(info.has_password ? "New password (optional: leave blank to keep the current one)" : "Password for the client")}
+      <div class="bb-actions"><button type="button" class="btn btn-primary" data-act="share-on" ${busy}>${info.path ? "Turn the link back on" : "Create client link"}</button>
+        ${msg}</div>`;
+    return;
+  }
+
+  const url = shareUrl(info);
+  const status = info.status === "upcoming"
+    ? `The campaign starts ${esc(niceDate(c.start_date))}. Until then the client sees a “starting soon” page; numbers appear from the first day.`
+    : info.fetched_at
+      ? `Numbers updated ${esc(agoText(info.fetched_at))}${info.status === "complete" ? ". The campaign has finished, so the page shows final results." : "; they update about every hour."}`
+      : "No numbers fetched yet. Click Refresh numbers now.";
+  el.innerHTML = `${head(`<span class="bb-pill done">On</span>`)}
+    <div class="field" style="gap:4px"><span class="field-label">Link</span>
+      <div class="bb-share-row"><input type="text" readonly value="${esc(url)}" aria-label="Client link" />
+        <button type="button" class="btn btn-ghost" data-act="share-copy">Copy link</button>
+        <a class="btn btn-ghost" href="${esc(url)}" target="_blank" rel="noopener">Open</a></div></div>
+    ${sh.password ? `<div class="bb-share-new">Password: <strong>${esc(sh.password)}</strong>
+        <button type="button" class="btn btn-ghost" data-act="share-copy-both">Copy link and password</button>
+        <span class="field-hint">Shown once. Only a scrambled copy is stored, so set a new password if it gets lost.</span></div>` : ""}
+    <p class="field-hint">${status}</p>
+    ${info.error ? `<p class="bb-msg error">The last update failed (${esc(agoText(info.attempted_at))}): ${esc(info.error)}. The client still sees the previous numbers.</p>` : ""}
+    ${sh.editing ? `${pwField("New password")}
+      <div class="bb-actions"><button type="button" class="btn btn-primary" data-act="share-pw-save" ${busy}>Save new password</button>
+        <button type="button" class="btn btn-ghost" data-act="share-pw-cancel" ${busy}>Cancel</button>${msg}</div>
+      <p class="field-hint">The client will need the new password. Anyone signed in with the old one is signed out.</p>`
+      : `<div class="bb-actions">
+        ${info.status !== "upcoming" ? `<button type="button" class="btn btn-primary" data-act="share-refresh" ${busy}>Refresh numbers now</button>` : ""}
+        <button type="button" class="btn btn-ghost" data-act="share-pw" ${busy}>Change password</button>
+        <button type="button" class="btn btn-ghost btn-danger" data-act="share-off" ${busy}>Turn off link</button>${msg}</div>`}`;
+}
+
+// Runs a share change with the buttons disabled and a progress/error message.
+async function shareAction(fn, progress) {
+  const sh = state.share;
+  Object.assign(sh, { busy: true, msg: progress || "", msgError: false });
+  renderShare();
+  try { await fn(); sh.msg = sh.doneMsg || ""; } catch (e) { sh.msg = e.message; sh.msgError = true; }
+  sh.busy = false; sh.doneMsg = "";
+  renderShare();
+}
+
+async function shareSave(body) {
+  const sh = state.share;
+  sh.info = await api(`/campaigns/${sh.id}/share`, { method: "PUT", body });
+  const c = state.campaigns.find((x) => x.id === sh.id);
+  if (c) c.share_enabled = sh.info.enabled;
+}
+
+async function shareRefresh() {
+  const sh = state.share;
+  sh.info = await api(`/campaigns/${sh.id}/share/refresh`, { method: "POST" });
+  if (sh.info.error) throw new Error(`Couldn't fetch the numbers: ${sh.info.error}`);
+}
+
+function copyText(text, okMsg) {
+  const sh = state.share;
+  navigator.clipboard.writeText(text).then(
+    () => { Object.assign(sh, { msg: okMsg, msgError: false }); renderShare(); },
+    () => { Object.assign(sh, { msg: "Couldn't copy. Select the text and copy it instead.", msgError: true }); renderShare(); });
+}
+
+function onShareClick(act) {
+  const sh = state.share;
+  if (!sh || sh.busy) return;
+  const pw = () => ($("bb-share-pw") ? $("bb-share-pw").value.trim() : "");
+  switch (act) {
+    case "share-gen": sh.draft = makePassword(); $("bb-share-pw").value = sh.draft; break;
+    case "share-on": {
+      const password = pw();
+      shareAction(async () => {
+        await shareSave({ enabled: true, ...(password ? { password } : {}) });
+        if (password) sh.password = password;
+        sh.draft = undefined;
+        if (sh.info.status !== "upcoming") {
+          sh.msg = "Link is on. Fetching the numbers for the client page (up to a minute)…";
+          renderShare();
+          await shareRefresh();
+        }
+      }, "Turning the link on…");
+      break;
+    }
+    case "share-off":
+      if (!confirm("Turn off the client link? The client can't open it until you turn it back on (same link and password).")) return;
+      sh.password = null;
+      shareAction(() => shareSave({ enabled: false }), "Turning off…");
+      break;
+    case "share-refresh":
+      sh.doneMsg = "Numbers updated.";
+      shareAction(shareRefresh, "Fetching fresh numbers (up to a minute)…");
+      break;
+    case "share-pw": sh.editing = true; sh.draft = makePassword(); sh.msg = ""; renderShare(); break;
+    case "share-pw-cancel": sh.editing = false; sh.msg = ""; renderShare(); break;
+    case "share-pw-save": {
+      const password = pw();
+      shareAction(async () => {
+        await shareSave({ enabled: true, password });
+        sh.password = password; sh.editing = false;
+      }, "Saving…");
+      break;
+    }
+    case "share-copy": copyText(shareUrl(sh.info), "Link copied."); break;
+    case "share-copy-both":
+      copyText(`Your live campaign results: ${shareUrl(sh.info)}\nPassword: ${sh.password}`, "Link and password copied.");
+      break;
+    default: break;
+  }
 }
 
 // ---- photo
@@ -612,6 +790,7 @@ function onClick(e) {
   const el = e.target.closest("[data-act]");
   if (!el) return;
   const f = state.form;
+  if (el.dataset.act.startsWith("share-")) { onShareClick(el.dataset.act); return; }
   switch (el.dataset.act) {
     case "new": select("new"); break;
     case "select": select(Number(el.dataset.id)); break;
@@ -659,10 +838,12 @@ function onClick(e) {
 function onInput(e) {
   const t = e.target;
   if (t.id === "bb-art-filter") { state.filter = t.value; renderArtworks(); return; }
+  if (t.id === "bb-share-pw") { if (state.share) state.share.draft = t.value; return; }
   const k = t.dataset && t.dataset.f;
   if (!k || !state.form || t.type === "checkbox") return;
   state.form[k] = t.value;
   if (k === "start_date" || k === "end_date") loadArtworks();
+  if (k === "artwork_keywords") renderArtworks();
   updateSaveState();
 }
 
