@@ -23,7 +23,7 @@
 
 import { json, requireAccess } from "./utils.js";
 import { ensureSchema, fetchCampaignData, todayLondon, addDays, campaignFromRow, screenFromRow } from "./billboard.js";
-import { buildModel } from "../public/billboard/model.js";
+import { agreedPercent } from "../public/billboard/model.js";
 
 const REFRESH_EVERY_MIN = 55;      // "hourly", allowing for the 15-minute cron
 const RETRY_AFTER_ERROR_MIN = 25;
@@ -136,17 +136,11 @@ async function screensFor(env, campaign) {
   return ids.map((i) => byId[i]).filter(Boolean);
 }
 
-// "+X% above agreed", over complete days only (today is still counting), rounded down; null if not above.
+// "+X% above agreed", over complete days only (today is still counting), leaving out a part-day
+// launch (see agreedPercent in model.js), rounded down; null if not above.
 function agreedPct(campaign, screens, plays, today) {
-  if (campaign.show_agreed === false || !campaign.share_of_voice) return null;
   const last = [addDays(today, -1), campaign.end_date].sort()[0];
-  if (last < campaign.start_date) return null;
-  const model = buildModel({ campaign, screens, start: campaign.start_date, end: last,
-    plays: plays.filter((p) => p.date <= last), footfall: [] });
-  const avd = model.agreedVsDelivered();
-  if (!avd || !avd.ratio || avd.ratio <= 1) return null;
-  const pct = Math.floor((avd.ratio - 1) * 100);
-  return pct >= 1 ? pct : null;
+  return agreedPercent({ campaign, screens, plays, last }).pct;
 }
 
 async function buildSnapshot(env, row) {

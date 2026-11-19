@@ -203,6 +203,40 @@ export function reportBasename(model) {
   return `${slug(model.campaign.client_name)}_Campaign-Report_${model.start}_to_${model.end}${model.isComplete ? "" : "_interim"}`;
 }
 
+// ------------------------------------------------------------------ client page: "+X% above agreed"
+// A launch day counts as a part day when its plays (on screens with an agreed rate) are under this
+// share of a normal day: the average of the complete days after it, or the agreed daily rate if
+// there are none yet. Navori doesn't say what time the ads started, so this is how we spot it.
+export const PARTIAL_LAUNCH_SHARE = 0.6;
+
+// Agreed vs delivered for the client page, over complete days up to `last`, leaving out a part-day
+// launch. Returns { pct, ratio, from, launchExcluded }; pct is rounded down and null unless above agreed.
+export function agreedPercent({ campaign, screens, plays, last }) {
+  const none = { pct: null, ratio: null, from: campaign.start_date, launchExcluded: false };
+  const sov = campaign.share_of_voice;
+  if (campaign.show_agreed === false || !sov || last < campaign.start_date) return none;
+  const key = sov === "1/6" ? "agreed_week_1_6" : "agreed_week_1_18";
+  const rated = new Set(screens.filter((s) => s[key]).map((s) => s.id));
+  if (!rated.size) return none;
+  const perDay = new Map();
+  for (const p of plays) {
+    if (rated.has(p.screen_id) && p.date >= campaign.start_date && p.date <= last) perDay.set(p.date, (perDay.get(p.date) || 0) + p.plays);
+  }
+  const start = campaign.start_date;
+  const later = [];
+  for (let d = addDays(start, 1); d <= last; d = addDays(d, 1)) later.push(perDay.get(d) || 0);
+  const agreedDay = screens.filter((s) => s[key]).reduce((a, s) => a + s[key], 0) / 7;
+  const normal = later.length ? later.reduce((a, b) => a + b, 0) / later.length : agreedDay;
+  const launchExcluded = (perDay.get(start) || 0) < PARTIAL_LAUNCH_SHARE * normal;
+  const from = launchExcluded ? addDays(start, 1) : start;
+  if (last < from) return { ...none, from, launchExcluded };
+  const avd = buildModel({ campaign, screens, start: from, end: last,
+    plays: plays.filter((p) => p.date >= from && p.date <= last), footfall: [] }).agreedVsDelivered();
+  const ratio = avd && avd.ratio;
+  const pct = ratio && ratio > 1 ? Math.floor((ratio - 1) * 100) : null;
+  return { pct: pct >= 1 ? pct : null, ratio, from, launchExcluded };
+}
+
 // ------------------------------------------------------------------ CSV
 const csvCell = (v) => {
   const s = v === null || v === undefined ? "" : String(v);
