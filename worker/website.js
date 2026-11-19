@@ -2,7 +2,8 @@
 // The website's own Worker (leapfrog-website repo, worker/index.js) records page views, visits and
 // conversions into the web_* tables of this database; this file only reads them.
 //
-//   GET /api/website/summary?days=30   everything the Analytics view needs for the last N UK days
+//   GET /api/website/summary?days=30                    everything the Analytics view needs for the last N UK days
+//   GET /api/website/summary?from=2026-10-01&to=2026-10-31   ...or for a custom UK date range (inclusive)
 
 import { json, requireAccess } from "./utils.js";
 import { ensureWebSchema } from "./website-schema.js";
@@ -18,8 +19,8 @@ export async function handleWebsite(request, env, pathname) {
   await schemaReady;
 
   if (pathname === "/api/website/summary" && request.method === "GET") {
-    const days = Math.min(400, Math.max(1, Number(new URL(request.url).searchParams.get("days")) || 30));
-    const res = json(await summary(env.DB, days));
+    const q = new URL(request.url).searchParams;
+    const res = json(await summary(env.DB, rangeFrom(q)));
     res.headers.set("cache-control", "no-store");
     return res;
   }
@@ -40,25 +41,45 @@ function ukMidnight(dayStr) {
   return guess - ukOffsetMs(guess);
 }
 
+// Calendar-day arithmetic on YYYY-MM-DD strings (UK days are just labels here).
+const addDays = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DAYS = 400;
+
+// ?days=N (last N UK days incl. today) or ?from=&to= (inclusive, clamped to today and MAX_DAYS).
+function rangeFrom(q) {
+  const today = ukDay(Date.now());
+  let from = q.get("from"), to = q.get("to");
+  if (ISO.test(from || "") && ISO.test(to || "") && !isNaN(Date.parse(from)) && !isNaN(Date.parse(to))) {
+    if (to > today) to = today;
+    if (from > to) from = to;
+    if (from < addDays(to, -(MAX_DAYS - 1))) from = addDays(to, -(MAX_DAYS - 1));
+    return { from, to, preset: null };
+  }
+  const days = Math.min(MAX_DAYS, Math.max(1, Number(q.get("days")) || 30));
+  return { from: addDays(today, -(days - 1)), to: today, preset: String(days) };
+}
+
 // ----------------------------------------------------------------------------- summary
-async function summary(db, days) {
+async function summary(db, { from, to, preset }) {
   const now = Date.now();
   const today = ukDay(now);
   const dayList = [];
-  for (let i = days - 1; i >= 0; i--) dayList.push(ukDay(ukMidnight(today) - i * DAY + 12 * 3600e3));
-  const since = ukMidnight(dayList[0]);
-  const prevSince = since - (ukMidnight(today) + DAY - since);
-  const off = Math.round(ukOffsetMs(now) / 1000);   // SQLite day grouping (exact except on clock-change nights)
+  for (let d = from; d <= to; d = addDays(d, 1)) dayList.push(d);
+  const days = dayList.length;
+  const since = ukMidnight(from);
+  const until = ukMidnight(addDays(to, 1));          // exclusive
+  const prevSince = ukMidnight(addDays(from, -days)); // same number of days, just before
+  const off = Math.round(ukOffsetMs(since) / 1000);   // SQLite day grouping (exact except on clock-change nights)
 
   const [sessions, pvDaily, pages, conversions, prevS, prevPv, prevC, first] = await db.batch([
     db.prepare(`SELECT started_at, visitor, channel, source, medium, campaign, landing, device, country, pages
-                FROM web_sessions WHERE started_at >= ?`).bind(since),
-    db.prepare(`SELECT strftime('%Y-%m-%d', ts / 1000 + ?, 'unixepoch') AS day, COUNT(*) AS n
-                FROM web_pageviews WHERE ts >= ? GROUP BY day`).bind(off, since),
+                FROM web_sessions WHERE started_at >= ? AND started_at < ?`).bind(since, until),
+    db.prepare(`SELECT ts FROM web_pageviews WHERE ts >= ? AND ts < ?`).bind(since, until),
     db.prepare(`SELECT path, COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
-                FROM web_pageviews WHERE ts >= ? GROUP BY path ORDER BY views DESC LIMIT 25`).bind(since),
+                FROM web_pageviews WHERE ts >= ? AND ts < ? GROUP BY path ORDER BY views DESC LIMIT 25`).bind(since, until),
     db.prepare(`SELECT id, ts, form, page, campaign_type, area, name, company, channel, source, medium, campaign,
-                landing, referrer, device FROM web_conversions WHERE ts >= ? ORDER BY ts DESC LIMIT 1000`).bind(since),
+                landing, referrer, device FROM web_conversions WHERE ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 1000`).bind(since, until),
     db.prepare(`SELECT COUNT(*) AS sessions, COUNT(DISTINCT visitor || strftime('%Y-%m-%d', started_at / 1000, 'unixepoch')) AS visitors
                 FROM web_sessions WHERE started_at >= ? AND started_at < ?`).bind(prevSince, since),
     db.prepare(`SELECT COUNT(*) AS n FROM web_pageviews WHERE ts >= ? AND ts < ?`).bind(prevSince, since),
@@ -69,7 +90,7 @@ async function summary(db, days) {
 
   // Daily series
   const daily = Object.fromEntries(dayList.map((d) => [d, { day: d, views: 0, sessions: 0, visitors: new Set(), conversions: 0 }]));
-  for (const r of pvDaily.results) if (daily[r.day]) daily[r.day].views = r.n;
+  for (const r of pvDaily.results) { const d = daily[ukDay(r.ts)]; if (d) d.views++; }
   for (const s of S) { const d = daily[ukDay(s.started_at)]; if (d) { d.sessions++; d.visitors.add(s.visitor); } }
   for (const c of C) { const d = daily[ukDay(c.ts)]; if (d) d.conversions++; }
   const dailyOut = dayList.map((d) => ({ ...daily[d], visitors: daily[d].visitors.size }));
@@ -93,7 +114,7 @@ async function summary(db, days) {
     guides: C.filter((c) => c.form === "guide").length,
   };
   return {
-    days, since, today, generated: now, first_data: first.results[0]?.first || null,
+    days, from, to, preset, since, until, today, generated: now, first_data: first.results[0]?.first || null,
     totals,
     previous: { sessions: prevS.results[0].sessions, visitors: prevS.results[0].visitors, pageviews: prevPv.results[0].n, conversions: prevC.results[0].n },
     daily: dailyOut,

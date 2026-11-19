@@ -115,3 +115,7 @@
   border-radius: var(--radius-m); background: color-mix(in srgb, var(--purple) 7%, var(--surface)); font-size: 14px; }
 #view-billboard .bb-share-new strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
 #view-billboard .bb-share-new .field-hint { flex-basis: 100%; }
+#view-billboard .bb-slug { gap: 0; flex-wrap: nowrap; }
+#view-billboard .bb-slug-prefix { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-muted); padding: 0 8px 0 0;
+  white-space: nowrap; }
+@media (max-width: 560px) { #view-billboard .bb-slug { flex-wrap: wrap; } }

@@ -2,11 +2,12 @@
 // (GET /client/api/<token>). Uses the same maths as the PDF report (billboard/model.js), served
 // via /client/lib so nothing else in the app is reachable from here.
 
-import { buildModel, fmtInt, fmtHM, niceDate } from "/client/lib/model.js";
-import { columnChart } from "/client/lib/charts.js";
+import { buildModel, fmtInt, fmtHM, niceDate } from "./lib/model.js";
+import { columnChart } from "./lib/charts.js";
 
-const token = (location.pathname.match(/^\/client\/([\w-]{16,40})/) || [])[1];
-const API = `/client/api/${token}`;
+// leapfrogadvertising.com/reports/<slug> (what clients get) or /client/<slug> (The Pond preview).
+const [, base, token] = location.pathname.match(/^\/(reports|client)\/([\w-]{4,64})$/) || [];
+const API = `/${base}/api/${token}`;
 const RELOAD_MS = 10 * 60e3;   // the numbers change about hourly; re-read the stored copy every 10 minutes
 
 const $ = (id) => document.getElementById(id);

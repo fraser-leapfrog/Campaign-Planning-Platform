@@ -7,16 +7,17 @@
 <meta name="referrer" content="no-referrer" />
 <meta name="theme-color" content="#2b1533" />
 <title>Campaign results · Leapfrog Advertising</title>
-<link rel="icon" type="image/png" href="/client/lib/icon.png" />
-<link rel="apple-touch-icon" href="/client/lib/icon.png" />
-<link rel="stylesheet" href="/client/client.css" />
+<!-- Relative paths: this page is served at leapfrogadvertising.com/reports/<slug> and /client/<slug>. -->
+<link rel="icon" type="image/png" href="lib/icon.png" />
+<link rel="apple-touch-icon" href="lib/icon.png" />
+<link rel="stylesheet" href="client.css" />
 </head>
 <body>
   <!-- Client results page (one per shared Billboard report). The token is in the URL; the password
        unlocks it. Numbers come from /client/api/<token>, refreshed about hourly by the Worker. -->
   <header class="top">
     <div class="wrap top-inner">
-      <img class="logo" src="/client/lib/logo.png" alt="Leapfrog Advertising" />
+      <img class="logo" src="lib/logo.png" alt="Leapfrog Advertising" />
       <div class="top-right" id="top-right"></div>
     </div>
   </header>
@@ -34,6 +35,6 @@
       · <button type="button" class="linklike" id="sign-out">Sign out</button></p>
   </footer>
 
-  <script type="module" src="/client/client.js"></script>
+  <script type="module" src="client.js"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 /* Client results page. Leapfrog palette: plum #2b1533, deep purple #510780, purple #7209b7, pink #e43f84,
    mauve #8b7797, lavender #eee0f5. Arboria is served from /client/lib (the app's own copy). */
-@font-face { font-family: "Arboria"; font-weight: 400; font-display: swap; src: url("/client/lib/Arboria-Book.ttf") format("truetype"); }
-@font-face { font-family: "Arboria"; font-weight: 500; font-display: swap; src: url("/client/lib/Arboria-Medium.ttf") format("truetype"); }
-@font-face { font-family: "Arboria"; font-weight: 700; font-display: swap; src: url("/client/lib/Arboria-Bold.ttf") format("truetype"); }
+@font-face { font-family: "Arboria"; font-weight: 400; font-display: swap; src: url("lib/Arboria-Book.ttf") format("truetype"); }
+@font-face { font-family: "Arboria"; font-weight: 500; font-display: swap; src: url("lib/Arboria-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Arboria"; font-weight: 700; font-display: swap; src: url("lib/Arboria-Bold.ttf") format("truetype"); }
 
 :root {
   --plum: #2b1533; --deep: #510780; --purple: #7209b7; --pink: #e43f84; --mauve: #8b7797; --lavender: #eee0f5;

@@ -375,7 +375,11 @@ function makePassword() {
   return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}`;
 }
 
-const shareUrl = (info) => `${location.origin}${info.path}`;
+const shareUrl = (info) => info.public_url;                  // https://leapfrogadvertising.com/reports/<slug>
+const REPORTS_PREFIX = "leapfrogadvertising.com/reports/";
+// Suggested address from the client name; the server adds 4 random characters if left as is.
+const suggestSlug = (name) => String(name || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
 
 function agoText(isoTime) {
   if (!isoTime) return "";
@@ -397,6 +401,12 @@ function renderShare() {
   const info = sh.info || {};
   const busy = sh.busy ? "disabled" : "";
   const msg = `<span class="bb-msg${sh.msgError ? " error" : ""}" id="bb-share-msg">${sh.msg ? esc(sh.msg) : ""}</span>`;
+  const slugField = (label, creating = true) => `
+    <div class="field" style="gap:4px"><label class="field-label" for="bb-share-slug">${label}</label>
+      <div class="bb-share-row bb-slug"><span class="bb-slug-prefix">${REPORTS_PREFIX}</span>
+        <input type="text" id="bb-share-slug" value="${esc(sh.slugDraft || "")}" placeholder="${esc(suggestSlug(c.client_name) || "client-name")}-xxxx"
+          autocomplete="off" spellcheck="false" /></div>
+      <span class="field-hint">Lowercase letters, numbers and hyphens.${creating ? " Leave blank for an automatic one (client name plus 4 random characters, harder to guess)." : ""}</span></div>`;
   const pwField = (label) => `
     <div class="field" style="gap:4px"><label class="field-label" for="bb-share-pw">${label}</label>
       <div class="bb-share-row"><input type="text" id="bb-share-pw" value="${esc(sh.draft || "")}" autocomplete="off" spellcheck="false" />
@@ -408,6 +418,7 @@ function renderShare() {
       <p class="field-hint" style="margin-top:0">A live results page for the client, locked with a password. It updates about
         every hour, includes today so far, and stops on the end date (${esc(niceDate(c.end_date))}). It never shows agreed
         plays, only “% above agreed”, and only when you're above it.</p>
+      ${info.slug ? "" : slugField("Address")}
       ${pwField(info.has_password ? "New password (optional: leave blank to keep the current one)" : "Password for the client")}
       <div class="bb-actions"><button type="button" class="btn btn-primary" data-act="share-on" ${busy}>${info.path ? "Turn the link back on" : "Create client link"}</button>
         ${msg}</div>`;
@@ -425,18 +436,23 @@ function renderShare() {
       <div class="bb-share-row"><input type="text" readonly value="${esc(url)}" aria-label="Client link" />
         <button type="button" class="btn btn-ghost" data-act="share-copy">Copy link</button>
         <a class="btn btn-ghost" href="${esc(url)}" target="_blank" rel="noopener">Open</a></div></div>
+    ${sh.editingSlug ? `${slugField("New address", false)}
+      <div class="bb-actions"><button type="button" class="btn btn-primary" data-act="share-slug-save" ${busy}>Save address</button>
+        <button type="button" class="btn btn-ghost" data-act="share-slug-cancel" ${busy}>Cancel</button>${msg}</div>
+      <p class="field-hint">The old address stops working straight away, so send the client the new one.</p>` : ""}
     ${sh.password ? `<div class="bb-share-new">Password: <strong>${esc(sh.password)}</strong>
         <button type="button" class="btn btn-ghost" data-act="share-copy-both">Copy link and password</button>
         <span class="field-hint">Shown once. Only a scrambled copy is stored, so set a new password if it gets lost.</span></div>` : ""}
     <p class="field-hint">${status}</p>
     ${info.error ? `<p class="bb-msg error">The last update failed (${esc(agoText(info.attempted_at))}): ${esc(info.error)}. The client still sees the previous numbers.</p>` : ""}
-    ${sh.editing ? `${pwField("New password")}
+    ${sh.editingSlug ? "" : sh.editing ? `${pwField("New password")}
       <div class="bb-actions"><button type="button" class="btn btn-primary" data-act="share-pw-save" ${busy}>Save new password</button>
         <button type="button" class="btn btn-ghost" data-act="share-pw-cancel" ${busy}>Cancel</button>${msg}</div>
       <p class="field-hint">The client will need the new password. Anyone signed in with the old one is signed out.</p>`
       : `<div class="bb-actions">
         ${info.status !== "upcoming" ? `<button type="button" class="btn btn-primary" data-act="share-refresh" ${busy}>Refresh numbers now</button>` : ""}
         <button type="button" class="btn btn-ghost" data-act="share-pw" ${busy}>Change password</button>
+        <button type="button" class="btn btn-ghost" data-act="share-slug" ${busy}>Change address</button>
         <button type="button" class="btn btn-ghost btn-danger" data-act="share-off" ${busy}>Turn off link</button>${msg}</div>`}`;
 }
 
@@ -474,12 +490,22 @@ function onShareClick(act) {
   const sh = state.share;
   if (!sh || sh.busy) return;
   const pw = () => ($("bb-share-pw") ? $("bb-share-pw").value.trim() : "");
+  const slug = () => ($("bb-share-slug") ? $("bb-share-slug").value.trim().toLowerCase() : "");
   switch (act) {
     case "share-gen": sh.draft = makePassword(); $("bb-share-pw").value = sh.draft; break;
+    case "share-slug": sh.editingSlug = true; sh.editing = false; sh.slugDraft = sh.info.slug; sh.msg = ""; renderShare(); break;
+    case "share-slug-cancel": sh.editingSlug = false; sh.msg = ""; renderShare(); break;
+    case "share-slug-save": {
+      const s = slug();
+      if (!s) return;
+      shareAction(async () => { await shareSave({ enabled: true, slug: s }); sh.editingSlug = false; sh.doneMsg = "Address changed."; }, "Saving…");
+      break;
+    }
     case "share-on": {
       const password = pw();
+      const s = slug();
       shareAction(async () => {
-        await shareSave({ enabled: true, ...(password ? { password } : {}) });
+        await shareSave({ enabled: true, ...(password ? { password } : {}), ...(s ? { slug: s } : {}) });
         if (password) sh.password = password;
         sh.draft = undefined;
         if (sh.info.status !== "upcoming") {
@@ -839,6 +865,7 @@ function onInput(e) {
   const t = e.target;
   if (t.id === "bb-art-filter") { state.filter = t.value; renderArtworks(); return; }
   if (t.id === "bb-share-pw") { if (state.share) state.share.draft = t.value; return; }
+  if (t.id === "bb-share-slug") { if (state.share) state.share.slugDraft = t.value; return; }
   const k = t.dataset && t.dataset.f;
   if (!k || !state.form || t.type === "checkbox") return;
   state.form[k] = t.value;

@@ -5,8 +5,11 @@
 //     PUT  /api/billboard/campaigns/:id/share           { enabled, password? } turn the link on/off, set a password
 //     POST /api/billboard/campaigns/:id/share/refresh   fetch fresh numbers now (~25 s)
 //
-//   Public (Access BYPASS for the /client path; the password is the only lock):
-//     GET  /client/<token>                 the results page (public/client/index.html)
+//   Public, for clients: https://leapfrogadvertising.com/reports/<slug>. The website Worker
+//   (Downloads/leapfrog-website) forwards /reports/* here over a service binding as /client/* with
+//   X-Client-Base: /reports, so it never passes through Cloudflare Access. The same pages also work
+//   at /client/* on The Pond's own address (behind Access), which is handy for previewing.
+//     GET  /client/<slug>                  the results page (public/client/index.html)
 //     GET  /client/lib/<file>              shared scripts/fonts/logo the page needs (the rest of the app stays private)
 //     GET  /client/api/<token>             the stored numbers (needs the session cookie)
 //     POST /client/api/<token>/login       { password } -> session cookie (30 days)
@@ -29,6 +32,19 @@ const MAX_REFRESHES_PER_RUN = 3;   // each takes ~25 s
 const SESSION_DAYS = 30;
 const MAX_FAILED_LOGINS = 8;       // per link, per 15 minutes
 const PBKDF2_ITERATIONS = 100000;  // the most Workers' WebCrypto allows
+const PUBLIC_BASE = "https://leapfrogadvertising.com/reports";   // what clients are sent
+const SLUG = "[A-Za-z0-9_-]{4,64}";                              // in URLs (older links were random tokens)
+const SLUG_RULE = /^[a-z0-9](?:[a-z0-9-]{2,58})[a-z0-9]$/;       // what can be typed in: 4-60, lowercase, hyphens
+
+// "Cariad Mortgage Solutions" -> "cariad-mortgage-solutions-k7m2". The 4 random characters keep it
+// unique and hard to guess; the password is still the real lock.
+function defaultSlug(clientName) {
+  const base = String(clientName || "report").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "") || "report";
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const rnd = [...crypto.getRandomValues(new Uint8Array(4))].map((n) => chars[n % chars.length]).join("");
+  return `${base}-${rnd}`;
+}
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS billboard_snapshots (
@@ -225,10 +241,21 @@ export async function handleShareAdmin(request, env, pathname) {
       const password = typeof b.password === "string" ? b.password.trim() : "";
       if (password && password.length < 6) throw new HttpError("Use at least 6 characters for the password.", 400);
       if (b.enabled && !password && !row.share_password) throw new HttpError("Set a password for the client first.", 400);
-      const token = row.share_token || randomB64url(16);
+      let token = row.share_token || defaultSlug(row.client_name);
+      if (typeof b.slug === "string" && b.slug.trim() && b.slug.trim().toLowerCase() !== token) {
+        token = b.slug.trim().toLowerCase();
+        if (!SLUG_RULE.test(token)) {
+          throw new HttpError("Use 4–60 lowercase letters, numbers and hyphens for the address (e.g. cariad-november).", 400);
+        }
+      }
       const hash = password ? await hashPassword(password) : row.share_password;
-      await env.DB.prepare(`UPDATE billboard_campaigns SET share_token=?, share_password=?, share_enabled=?, share_updated_at=?
-        WHERE id=?`).bind(token, hash, b.enabled ? 1 : 0, new Date().toISOString(), id).run();
+      try {
+        await env.DB.prepare(`UPDATE billboard_campaigns SET share_token=?, share_password=?, share_enabled=?, share_updated_at=?
+          WHERE id=?`).bind(token, hash, b.enabled ? 1 : 0, new Date().toISOString(), id).run();
+      } catch (e) {
+        if (String(e).includes("UNIQUE")) throw new HttpError("Another report already uses that address. Try a different one.", 409);
+        throw e;
+      }
       row = await load();
       return json(await shareStatus(env, row));
     }
@@ -245,7 +272,9 @@ async function shareStatus(env, row) {
     .bind(row.id).first();
   return {
     enabled: !!row.share_enabled, has_password: !!row.share_password,
-    path: row.share_token ? `/client/${row.share_token}` : null,
+    slug: row.share_token || null,
+    path: row.share_token ? `/client/${row.share_token}` : null,               // preview on The Pond
+    public_url: row.share_token ? `${PUBLIC_BASE}/${row.share_token}` : null,  // what the client gets
     status: campaignStatus(row, todayLondon()),
     fetched_at: (snap && snap.fetched_at) || null, attempted_at: (snap && snap.attempted_at) || null,
     error: (snap && snap.error) || null,
@@ -280,6 +309,15 @@ export async function handleClient(request, env, pathname) {
   if (pathname !== "/client" && !pathname.startsWith("/client/")) return null;
   const url = new URL(request.url);
 
+  // Behind leapfrogadvertising.com/reports the website Worker says so; cookies and redirects follow it.
+  const base = request.headers.get("X-Client-Base") === "/reports" ? "/reports" : "/client";
+
+  // The page's own files. (Normally served as static assets; handled here too for service-binding calls.)
+  if (request.method === "GET" && /^\/client\/client\.(js|css)$/.test(pathname)) {
+    return withHeaders(await env.ASSETS.fetch(new Request(new URL(pathname, url), { method: "GET" })),
+      { "Cache-Control": "no-cache", "X-Robots-Tag": "noindex" });
+  }
+
   let match = pathname.match(/^\/client\/lib\/([\w.-]+)$/);
   if (match) {
     const target = CLIENT_LIB[match[1]];
@@ -288,10 +326,10 @@ export async function handleClient(request, env, pathname) {
     return withHeaders(res, { "Cache-Control": "public, max-age=3600", "X-Robots-Tag": "noindex" });
   }
 
-  if ((match = pathname.match(/^\/client\/api\/([\w-]{16,40})(\/login|\/logout|\/photo)?$/))) {
+  if ((match = pathname.match(new RegExp(`^/client/api/(${SLUG})(/login|/logout|/photo)?$`)))) {
     try {
       await ensureShareSchema(env);
-      return await clientApi(request, env, match[1], match[2] || "");
+      return await clientApi(request, env, match[1], match[2] || "", base);
     } catch (e) {
       if (e instanceof HttpError) return clientJson({ error: e.message }, e.status);
       console.error("client api error", e);
@@ -299,15 +337,16 @@ export async function handleClient(request, env, pathname) {
     }
   }
 
-  // The page itself, for any /client/<token> address (the page reads the token from the URL).
-  if (request.method === "GET" && /^\/client\/[\w-]{16,40}\/?$/.test(pathname)) {
+  // The page itself, for any /client/<slug> address (the page reads the slug from the URL).
+  if (request.method === "GET" && (match = pathname.match(new RegExp(`^/client/(${SLUG})(/?)$`)))) {
+    if (match[2]) return new Response(null, { status: 301, headers: { Location: `${base}/${match[1]}` } });   // its files are relative
     return withHeaders(await env.ASSETS.fetch(new Request(new URL("/client/", url), { method: "GET" })),
       { ...PRIVATE_HEADERS, "Cache-Control": "no-cache" });
   }
   return new Response("Not found", { status: 404, headers: PRIVATE_HEADERS });
 }
 
-async function clientApi(request, env, token, action) {
+async function clientApi(request, env, token, action, base) {
   const row = await env.DB.prepare("SELECT * FROM billboard_campaigns WHERE share_token=? AND share_enabled=1").bind(token).first();
   if (!row || !row.share_password) throw new HttpError("This link isn't active. Please ask Leapfrog Advertising for a new one.", 404);
   const m = request.method;
@@ -327,12 +366,12 @@ async function clientApi(request, env, token, action) {
     const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400;
     const value = `${exp}.${await sessionSig(env, token, exp, row.share_password)}`;
     return clientJson({ ok: true }, 200, {
-      "Set-Cookie": `${cookieName(token)}=${value}; Path=/client/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly; Secure; SameSite=Lax`,
+      "Set-Cookie": `${cookieName(token)}=${value}; Path=${base}/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly; Secure; SameSite=Lax`,
     });
   }
   if (action === "/logout") {
     if (m !== "POST") throw new HttpError("Not found", 404);
-    return clientJson({ ok: true }, 200, { "Set-Cookie": `${cookieName(token)}=; Path=/client/; Max-Age=0; HttpOnly; Secure; SameSite=Lax` });
+    return clientJson({ ok: true }, 200, { "Set-Cookie": `${cookieName(token)}=; Path=${base}/; Max-Age=0; HttpOnly; Secure; SameSite=Lax` });
   }
 
   if (m !== "GET") throw new HttpError("Not found", 404);

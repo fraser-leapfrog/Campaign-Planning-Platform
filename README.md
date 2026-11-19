@@ -236,7 +236,14 @@ wrangler dev --local --env-file ~/Downloads/leapfrog-campaign-reports/.env --var
 ## Client links (live results for clients)
 
 Each Billboard report can have a **client link**: a password-protected, phone-friendly results page
-at `/client/<random token>`. Turn it on in the report's **Client link** card (Billboard Reporting tab).
+at **`https://leapfrogadvertising.com/reports/<address>`** (address editable, default client name + 4
+random characters). Turn it on in the report's **Client link** card (Billboard Reporting tab).
+
+How the address works: the website Worker (`Downloads/leapfrog-website`, Worker `leapfrog-website`)
+has a service binding `POND` to this Worker and forwards only the exact `/reports/...` paths the page
+uses, as `/client/...` with `X-Client-Base: /reports`. Service bindings don't pass through Cloudflare
+Access, so **no Access bypass is needed** and The Pond itself stays fully behind Access. The same page
+also works at `/client/<address>` on The Pond's own address (behind Access) for previewing.
 
 - **Freshness:** the Worker cron (every 15 min) refreshes each shared, running campaign about once an
   hour and stores a cleaned copy in `billboard_snapshots`. Today's numbers are shown as "so far".
@@ -252,11 +259,9 @@ at `/client/<random token>`. Turn it on in the report's **Client link** card (Bi
   15 minutes locks the link for 15 minutes. The page can only load the files listed in `CLIENT_LIB`
   (worker/share.js); everything else stays behind Access. No notes, Navori/Datajam ids or agreed
   rates are sent to the client.
-- **Cloudflare Access (one-off setup):** the `/client` path needs its own Access application with a
-  **Bypass → Everyone** policy, otherwise clients get the team sign-in page. Zero Trust → Access →
-  Applications → Add → Self-hosted: domain `campaign-planning-platform.fraser-760.workers.dev`,
-  path `client`; policy action **Bypass**, include **Everyone**. (Add the same for
-  `pond.leapfrogadvertising.com/client` if that domain is set up later.)
+- **Local testing of the website path:** run this Worker with `wrangler dev --name
+  campaign-planning-platform` (wrangler.toml's name is the old one) so the website's `wrangler dev
+  --env production` can connect its `POND` binding.
 
 Code: `worker/share.js` (routes, snapshot, cron), `public/client/` (the page), Client link card in
 `public/billboard/billboard.js`.
