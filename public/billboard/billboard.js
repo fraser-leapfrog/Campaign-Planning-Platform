@@ -83,16 +83,33 @@ async function init() {
 
 // The first report still to do (oldest finished first), else the most recent campaign.
 function firstCampaignId() {
-  const todo = sortedCampaigns().todo;
-  return todo[0] ? todo[0].id : state.campaigns[0] ? state.campaigns[0].id : "new";
+  const { todo, live } = sortedCampaigns();
+  const first = todo[0] || live[0] || state.campaigns[0];
+  return first ? first.id : "new";
 }
 
+// Live: the client link is on and the campaign hasn't ended (incl. ones set up before launch).
+// After the end date a report drops back into To do so the final report gets done.
+const isLive = (c) => c.share_enabled && c.end_date >= today();
+
 function sortedCampaigns() {
-  const todo = state.campaigns.filter((c) => c.report_status !== "completed")
+  const live = state.campaigns.filter(isLive)
     .sort((a, b) => a.end_date.localeCompare(b.end_date) || a.id - b.id);
-  const done = state.campaigns.filter((c) => c.report_status === "completed")
+  const rest = state.campaigns.filter((c) => !isLive(c));
+  const todo = rest.filter((c) => c.report_status !== "completed")
+    .sort((a, b) => a.end_date.localeCompare(b.end_date) || a.id - b.id);
+  const done = rest.filter((c) => c.report_status === "completed")
     .sort((a, b) => String(b.completed_at || "").localeCompare(String(a.completed_at || "")) || b.id - a.id);
-  return { todo, done };
+  return { live, todo, done };
+}
+
+// "Day 12 of 28" / "Starts 1 Dec" for the Live list.
+function liveProgress(c) {
+  const t = today();
+  if (t < c.start_date) return `Starts ${niceDate(c.start_date)}`;
+  const day = Math.round((toDate(t) - toDate(c.start_date)) / 86400000) + 1;
+  const total = Math.round((toDate(c.end_date) - toDate(c.start_date)) / 86400000) + 1;
+  return `Day ${day} of ${total}`;
 }
 
 // ----------------------------------------------------------------------------- helpers
@@ -151,29 +168,45 @@ function banner() {
     Variables and Secrets: <code>${esc(missing)}</code>.</div>`;
 }
 
-function renderReports() {
-  const item = (c) => `
-    <button type="button" class="bb-item${c.report_status === "completed" ? " done" : ""}" data-act="select" data-id="${c.id}" aria-current="${c.id === state.selected}">
+function listHtml() {
+  const item = (c) => {
+    const live = isLive(c);
+    return `
+    <button type="button" class="bb-item${c.report_status === "completed" && !live ? " done" : ""}" data-act="select" data-id="${c.id}" aria-current="${c.id === state.selected}">
       <div class="bb-item-name">${esc(c.client_name)}</div>
       <div class="bb-item-meta">${esc(niceDate(c.start_date))} – ${esc(niceDate(c.end_date))}${c.share_of_voice ? ` · ${esc(c.share_of_voice)}` : ""}</div>
-      <div class="bb-tags">${c.from_board ? `<span class="bb-tag">From Campaign Board</span>` : ""}
+      <div class="bb-tags">${live ? `<span class="bb-tag live">${esc(liveProgress(c))}</span>` : ""}
+        ${c.from_board ? `<span class="bb-tag">From Campaign Board</span>` : ""}
         ${c.report_status !== "completed" && !c.artworks.length && !c.artwork_keywords ? `<span class="bb-tag warn">Pick artworks</span>` : ""}
-        ${c.share_enabled ? `<span class="bb-tag live">Client link on</span>` : ""}
-        ${c.report_status !== "completed" && c.end_date >= today() ? `<span class="bb-tag">Still running</span>` : ""}</div>
+        ${c.share_enabled && !live ? `<span class="bb-tag live">Client link on</span>` : ""}
+        ${!live && c.report_status !== "completed" && c.end_date >= today() ? `<span class="bb-tag">Still running</span>` : ""}</div>
     </button>`;
-  const { todo, done } = sortedCampaigns();
-  const list = `
+  };
+  const { live, todo, done } = sortedCampaigns();
+  return `
+    <div class="bb-group-head"><span class="bb-live-dot" aria-hidden="true"></span>Live <span class="bb-count">${live.length}</span></div>
+    ${live.map(item).join("") || `<div class="bb-empty">No live reports. Turn on a report's client link and it shows here until the campaign ends.</div>`}
     <div class="bb-group-head">To do <span class="bb-count">${todo.length}</span></div>
     ${todo.map(item).join("") || `<div class="bb-empty">Nothing to do. Finished campaigns from the Campaign Board appear here.</div>`}
     <div class="bb-group-head">Completed <span class="bb-count">${done.length}</span></div>
     ${done.map(item).join("") || `<div class="bb-empty">No completed reports yet.</div>`}`;
+}
+
+// Just the left-hand list (e.g. after a client link is turned on/off), leaving the editor alone.
+function renderList() {
+  const el = $("bb-list");
+  if (el) el.innerHTML = listHtml();
+}
+
+function renderReports() {
+  const list = listHtml();
 
   $("bb-reports").innerHTML = `${banner()}
     <div class="bb-layout">
       <div class="chart-card">
         <div class="chart-card-head"><h2>Reports</h2>
           <button type="button" class="btn btn-primary" data-act="new">New</button></div>
-        <div class="bb-list">${list}</div>
+        <div class="bb-list" id="bb-list">${list}</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:18px; min-width:0">
         <div class="chart-card" id="bb-editor">${editorHtml()}</div>
@@ -470,7 +503,7 @@ async function shareSave(body) {
   const sh = state.share;
   sh.info = await api(`/campaigns/${sh.id}/share`, { method: "PUT", body });
   const c = state.campaigns.find((x) => x.id === sh.id);
-  if (c) c.share_enabled = sh.info.enabled;
+  if (c) { c.share_enabled = sh.info.enabled; renderList(); }   // moves in/out of the Live list
 }
 
 async function shareRefresh() {
