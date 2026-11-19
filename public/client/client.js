@@ -149,7 +149,7 @@ function render() {
       <div class="s">across ${m.screens.length} screen${m.screens.length === 1 ? "" : "s"}</div></div>`];
   if (footfall) {
     tiles.push(`<div class="tile"><div class="v">${fmtInt(t.impressions)}</div><div class="l">Potential impressions</div>
-      <div class="s">people passing your screens</div></div>`);
+      <div class="s">based on footfall by each placement</div></div>`);
   }
   if (today) {
     tiles.push(`<div class="tile"><div class="v">${fmtInt(today.plays)}</div><div class="l">Plays today so far</div>
@@ -160,7 +160,7 @@ function render() {
   const dailyCards = `<div class="${footfall ? "grid2" : ""}">
       <div class="card"><h2>Plays per day</h2><p class="sub">Every time your advert played</p><div class="chart" id="ch-plays"></div>
         ${partial ? `<div class="key"><span><i style="background:#510780"></i>Full day</span><span><i style="background:#c4a1e0"></i>Today so far</span></div>` : ""}</div>
-      ${footfall ? `<div class="card"><h2>Potential impressions per day</h2><p class="sub">People passing your screens</p><div class="chart" id="ch-imps"></div>
+      ${footfall ? `<div class="card"><h2>Potential impressions per day</h2><p class="sub">Based on footfall by each placement</p><div class="chart" id="ch-imps"></div>
         ${partial ? `<div class="key"><span><i style="background:#510780"></i>Full day</span><span><i style="background:#c4a1e0"></i>Today so far</span></div>` : ""}</div>` : ""}
     </div>`;
   const hourlyCard = footfall && completeDays.length ? `<div class="card"><h2>When people pass your screens</h2>
