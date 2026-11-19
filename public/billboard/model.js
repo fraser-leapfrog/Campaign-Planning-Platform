@@ -120,7 +120,23 @@ export function buildModel(raw) {
 
     // Agreed figures for the client-facing report and CSV: null when "Show agreed plays" is off.
     agreedForReport() {
-      return campaign.show_agreed === false ? null : m.agreedVsDelivered();
+      if (campaign.show_agreed === false) return null;
+      const avd = m.agreedVsDelivered();
+      if (!avd) return null;
+      const h = m.headlineRatio();
+      return { ...avd, ratio: h.ratio, launchExcluded: h.launchExcluded, launchDate: h.launchDate };
+    },
+
+    // Delivered vs agreed for the "+X% above agreed" / "Y% of agreed" headline (PDF, client page,
+    // numbers panel), leaving out a part-day launch (agreedPercent below). The agreed line and the
+    // per-location table still use every day.
+    headlineRatio() {
+      const avd = m.agreedVsDelivered();
+      if (!avd) return null;
+      const adj = agreedPercent({ campaign: { ...campaign, show_agreed: true }, screens, plays, last: end });
+      return adj.launchExcluded && adj.ratio
+        ? { ratio: adj.ratio, launchExcluded: true, launchDate: campaign.start_date }
+        : { ratio: avd.ratio, launchExcluded: false, launchDate: null };
     },
 
     agreedVsDelivered() {
@@ -195,7 +211,8 @@ export function periodParts(a, b) {   // {dates: 'October 24 - October 31', year
 
 export function versusText(ratio) {
   if (ratio === null || ratio === undefined) return "";
-  return ratio >= 1 ? `+${Math.round((ratio - 1) * 100)}% above agreed` : `${Math.round(ratio * 100)}% of agreed`;
+  // "Above" is rounded down, like the client page, so the two always match and never overstate.
+  return ratio >= 1 ? `+${Math.floor((ratio - 1) * 100 + 1e-9)}% above agreed` : `${Math.round(ratio * 100)}% of agreed`;
 }
 
 export function reportBasename(model) {
@@ -233,7 +250,7 @@ export function agreedPercent({ campaign, screens, plays, last }) {
   const avd = buildModel({ campaign, screens, start: from, end: last,
     plays: plays.filter((p) => p.date >= from && p.date <= last), footfall: [] }).agreedVsDelivered();
   const ratio = avd && avd.ratio;
-  const pct = ratio && ratio > 1 ? Math.floor((ratio - 1) * 100) : null;
+  const pct = ratio && ratio > 1 ? Math.floor((ratio - 1) * 100 + 1e-9) : null;   // 1e-9: 1.29 -> 29, not 28
   return { pct: pct >= 1 ? pct : null, ratio, from, launchExcluded };
 }
 

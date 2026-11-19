@@ -651,13 +651,15 @@ function numbersHtml(d) {
   const m = d.model;
   const t = m.totals();
   const avd = m.agreedVsDelivered();
+  const head = m.headlineRatio();   // "% above agreed", leaving out a part-day launch (as on the PDF)
   const kind = m.isComplete ? "Final" : "Interim";
   const stats = [];
   const hidden = avd && m.campaign.show_agreed === false ? " · not on the report" : "";
   if (avd) stats.push(`<div class="bb-stat"><div class="v">${fmtInt(avd.agreed)}</div><div class="l">Agreed plays</div>
       <div class="field-hint">${esc(avd.package)} · ${fmtInt(avd.weekly)} per week${hidden}</div></div>`);
   stats.push(`<div class="bb-stat delivered"><div class="v">${fmtInt(t.plays)}</div><div class="l">${avd ? "Delivered plays" : "Total plays"}</div>
-      ${avd ? `<div class="d${avd.ratio < 1 ? " under" : ""}">${esc(versusText(avd.ratio))}</div>` : ""}</div>`);
+      ${avd ? `<div class="d${head.ratio < 1 ? " under" : ""}">${esc(versusText(head.ratio))}</div>` : ""}
+      ${head && head.launchExcluded ? `<div class="field-hint">Launch day (${esc(niceDate(head.launchDate, { year: false }))}) left out of this: it was a part day.</div>` : ""}</div>`);
   stats.push(`<div class="bb-stat"><div class="v">${fmtHM(t.airtime_s)}</div><div class="l">Total time played</div></div>`);
   if (m.includeFootfall) stats.push(`<div class="bb-stat"><div class="v">${fmtInt(t.impressions)}</div><div class="l">Potential impressions</div></div>`);
 
