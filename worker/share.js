@@ -200,9 +200,11 @@ export async function refreshDueShares(env) {
   const retry = new Date(Date.now() - RETRY_AFTER_ERROR_MIN * 60e3).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT c.* FROM billboard_campaigns c LEFT JOIN billboard_snapshots s ON s.campaign_id = c.id
-     WHERE c.share_enabled = 1 AND c.start_date <= ? AND c.end_date >= ?
-       AND (s.fetched_at IS NULL OR s.fetched_at < ? OR c.updated_at > s.fetched_at)   -- due, or the report was edited
-       AND (s.error IS NULL OR s.attempted_at < ?)   -- after a failure, wait before retrying
+     WHERE c.share_enabled = 1 AND c.start_date <= ?
+       AND (s.fetched_at IS NULL                                  -- never fetched
+         OR c.updated_at > s.fetched_at                           -- report edited since (screens, dates, artwork...), even after it ended
+         OR (c.end_date >= ? AND s.fetched_at < ?))               -- running (or just ended) and due its hourly refresh
+       AND (s.error IS NULL OR s.attempted_at < ?)                -- after a failure, wait before retrying
      ORDER BY COALESCE(s.fetched_at, '') LIMIT ?`)
     .bind(today, addDays(today, -KEEP_REFRESHING_DAYS), fresh, retry, MAX_REFRESHES_PER_RUN).all();
   for (const row of results) {

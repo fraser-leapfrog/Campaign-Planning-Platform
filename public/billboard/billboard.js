@@ -151,7 +151,7 @@ function select(id) {
   state.share = c ? { id: c.id, loading: true } : null;
   renderReports();
   loadArtworks();
-  if (c) loadShare(c.id);
+  if (c) state.share.ready = loadShare(c.id);
   if (c && c.has_photo) {
     api(`/campaigns/${c.id}/photo`).then((r) => { if (state.form.id === c.id) { state.photo = r.data_url; renderPhoto(); } })
       .catch(() => {});
@@ -720,7 +720,21 @@ async function saveCampaign() {
     state.campaigns = await api("/campaigns");
     select(saved.id);
     setMsg("bb-save-msg", "Saved.");
+    if (f.id) refreshClientAfterSave(saved.id);
   } catch (e) { setMsg("bb-save-msg", e.message, true); }
+}
+
+// If the client link is on, rebuild the client's live page straight away so edits (an extra screen,
+// new dates, more artwork) show there now rather than at the next hourly refresh.
+async function refreshClientAfterSave(id) {
+  const sh = state.share;
+  if (!sh || sh.id !== id) return;
+  await sh.ready;
+  if (state.share !== sh || !sh.info || !sh.info.enabled || sh.info.status === "upcoming") return;
+  setMsg("bb-save-msg", "Saved. Updating the client's live page too…");
+  sh.doneMsg = "Client page updated with your changes.";
+  await shareAction(shareRefresh, "Updating the client's live page with your changes (up to a minute)…");
+  if (state.share === sh) setMsg("bb-save-msg", sh.msgError ? "Saved, but the client page couldn't update. See Client link below." : "Saved. The client's live page is updated.", sh.msgError);
 }
 
 async function deleteCampaign() {
