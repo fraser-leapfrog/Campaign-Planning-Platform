@@ -70,12 +70,13 @@ async function summary(db, { from, to, preset }) {
   const since = ukMidnight(from);
   const until = ukMidnight(addDays(to, 1));          // exclusive
   const prevSince = ukMidnight(addDays(from, -days)); // same number of days, just before
-  const off = Math.round(ukOffsetMs(since) / 1000);   // SQLite day grouping (exact except on clock-change nights)
+  const off = Math.round(ukOffsetMs(now) / 1000);      // SQLite day grouping (exact except on clock-change nights)
 
   const [sessions, pvDaily, pages, conversions, prevS, prevPv, prevC, first] = await db.batch([
     db.prepare(`SELECT started_at, visitor, channel, source, medium, campaign, landing, device, country, pages
                 FROM web_sessions WHERE started_at >= ? AND started_at < ?`).bind(since, until),
-    db.prepare(`SELECT ts FROM web_pageviews WHERE ts >= ? AND ts < ?`).bind(since, until),
+    db.prepare(`SELECT strftime('%Y-%m-%d', ts / 1000 + ?, 'unixepoch') AS day, COUNT(*) AS n
+                FROM web_pageviews WHERE ts >= ? AND ts < ? GROUP BY day`).bind(off, since, until),
     db.prepare(`SELECT path, COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
                 FROM web_pageviews WHERE ts >= ? AND ts < ? GROUP BY path ORDER BY views DESC LIMIT 25`).bind(since, until),
     db.prepare(`SELECT id, ts, form, page, campaign_type, area, name, company, channel, source, medium, campaign,
@@ -90,7 +91,7 @@ async function summary(db, { from, to, preset }) {
 
   // Daily series
   const daily = Object.fromEntries(dayList.map((d) => [d, { day: d, views: 0, sessions: 0, visitors: new Set(), conversions: 0 }]));
-  for (const r of pvDaily.results) { const d = daily[ukDay(r.ts)]; if (d) d.views++; }
+  for (const r of pvDaily.results) if (daily[r.day]) daily[r.day].views = r.n;
   for (const s of S) { const d = daily[ukDay(s.started_at)]; if (d) { d.sessions++; d.visitors.add(s.visitor); } }
   for (const c of C) { const d = daily[ukDay(c.ts)]; if (d) d.conversions++; }
   const dailyOut = dayList.map((d) => ({ ...daily[d], visitors: daily[d].visitors.size }));

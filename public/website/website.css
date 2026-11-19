@@ -46,3 +46,46 @@
   background: color-mix(in srgb, var(--pink) 14%, var(--surface)); color: var(--pink); }
 #view-website .web-form.guide { background: color-mix(in srgb, var(--purple) 12%, var(--surface)); color: var(--purple); }
 #view-website .chart-card-head .chip-group .chip { padding: 5px 11px; font-size: 12.5px; }
+
+/* Date range control (preset + custom from/to) */
+#view-website .web-dates { flex-wrap: nowrap; }
+#view-website .web-dates select, #view-website .web-dates input[type="date"] { width: auto; }
+#view-website .web-dates select { border: none; border-right: 1px solid var(--line); border-radius: 0; background-color: transparent; height: auto; padding: 4px 30px 4px 6px; font-weight: 500; }
+#view-website .web-dates .date-range { display: inline-flex; align-items: center; }
+@media (max-width: 640px) { #view-website .web-dates { flex-wrap: wrap; } #view-website .web-dates select { border-right: none; } }
+#view-website .web-stale { opacity: .55; transition: opacity .15s ease; pointer-events: none; }
+
+/* Over-time line chart. Series colours validated (light on #fff, dark on #150b24) for CVD separation. */
+#view-website { --web-s1: #7209b7; --web-s2: #e43f84; --web-s3: #2a78d6; --web-s4: #c98500; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #view-website { --web-s1: #8e44d0; --web-s2: #e0508f; --web-s3: #2f9be6; --web-s4: #c98500; }
+}
+:root[data-theme="dark"] #view-website { --web-s1: #8e44d0; --web-s2: #e0508f; --web-s3: #2f9be6; --web-s4: #c98500; }
+
+#view-website .web-line { position: relative; outline: none; border-radius: var(--radius-s); }
+#view-website .web-line:focus-visible { outline: 2px solid var(--pink); outline-offset: 4px; }
+#view-website .web-line svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; cursor: crosshair; }
+#view-website .web-line text { font-family: var(--font-body); font-variant-numeric: tabular-nums; }
+#view-website .web-axis { font-size: 11px; fill: var(--text-muted); }
+#view-website .web-end { font-size: 11.5px; font-weight: 500; fill: var(--text); }
+#view-website .web-grid-line { stroke: var(--line); stroke-width: 1; }
+#view-website .web-base { stroke: color-mix(in srgb, var(--text-muted) 45%, var(--line)); stroke-width: 1; }
+#view-website .web-cross line { stroke: var(--text-muted); stroke-width: 1; }
+#view-website .web-key { display: inline-block; width: 14px; height: 2px; border-radius: 1px; margin-right: 7px; vertical-align: middle; }
+#view-website .web-line-chip[aria-pressed="false"] { opacity: .55; }
+#view-website .web-line-chip[aria-pressed="false"] .web-key { background: var(--text-muted) !important; }
+
+#view-website .web-tip {
+  position: absolute; top: 4px; left: 0; opacity: 0; pointer-events: none; z-index: 5;
+  transform: translateX(14px); background: var(--text); color: var(--bg);
+  font-size: 12.5px; line-height: 1.45; padding: 9px 12px; border-radius: 8px; white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(0,0,0,.24); transition: opacity .1s ease; font-variant-numeric: tabular-nums;
+}
+#view-website .web-tip.flip { transform: translateX(calc(-100% - 14px)); }
+#view-website .web-tip.show { opacity: 1; }
+#view-website .web-tip-date { font-weight: 500; opacity: .75; margin-bottom: 4px; }
+#view-website .web-tip-row { display: flex; align-items: center; gap: 8px; }
+#view-website .web-tip-row b { min-width: 3.5ch; text-align: right; font-weight: 700; }
+#view-website .web-tip-row.off { opacity: .6; }
+#view-website .web-tip-key { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+#view-website .web-tip-foot { margin-top: 4px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--bg) 25%, transparent); opacity: .75; }

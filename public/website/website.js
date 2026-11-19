@@ -3,10 +3,12 @@
 // Data: GET /api/website/summary?days=N (worker/website.js). Loaded as a module by index.html;
 // the page tab handler calls window.Website.show() when the tab is opened.
 
-import { columnChart, fmtNum } from "../billboard/charts.js";
+import { niceTicks, fmtNum } from "../billboard/charts.js";
 
-const RANGES = [["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["365", "12 months"]];
+const RANGES = [["7", "Last 7 days"], ["14", "Last 14 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last 12 months"]];
+// Over-time series. Colours are CSS vars (website.css, light + dark steps validated for colour-blind separation).
 const METRICS = [["views", "Page views"], ["sessions", "Visits"], ["visitors", "Visitors"], ["conversions", "Conversions"]];
+const METRIC_COLOUR = { views: "var(--web-s1)", sessions: "var(--web-s2)", visitors: "var(--web-s3)", conversions: "var(--web-s4)" };
 const CHANNEL_COLOURS = {
   "Paid Search": "#e43f84", "Organic Search": "#7209b7", "Direct": "#8b7797", "Referral": "#3a86c8",
   "Organic Social": "#2a9d8f", "Paid Social": "#f08a24", "Email": "#d9ad3c", "QR & Offline": "#510780",
@@ -23,21 +25,30 @@ let countryNames = null;
 try { countryNames = new Intl.DisplayNames(["en-GB"], { type: "region" }); } catch (_) {}
 const country = (c) => { try { return c && c !== "??" && countryNames ? countryNames.of(c) : "Unknown"; } catch (_) { return c; } };
 const dayLabel = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const dayLong = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const when = (ms) => new Date(ms).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 
-const state = { days: "30", metric: "views", data: null, loading: false, error: null, form: "all", channel: null };
+// days: a RANGES preset, or "custom" (then from/to, YYYY-MM-DD, are sent instead)
+const state = { days: "30", from: null, to: null, lines: new Set(["views", "sessions", "visitors"]),
+  data: null, loading: false, error: null, form: "all", channel: null };
 
 // ----------------------------------------------------------------------------- entry
 let shown = false;
 export async function show() {
-  if (!shown) { shown = true; $("web-analytics").addEventListener("click", onClick); }
+  if (!shown) {
+    shown = true;
+    $("web-analytics").addEventListener("click", onClick);
+    $("web-analytics").addEventListener("change", onChange);
+  }
   await load();
 }
 
 async function load() {
   state.loading = true; state.error = null; render();
   try {
-    const res = await fetch(`/api/website/summary?days=${state.days}`, { cache: "no-store" });
+    const q = state.days === "custom" && state.from && state.to
+      ? `from=${encodeURIComponent(state.from)}&to=${encodeURIComponent(state.to)}` : `days=${state.days}`;
+    const res = await fetch(`/api/website/summary?${q}`, { cache: "no-store" });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
     state.data = data;
@@ -49,13 +60,32 @@ function onClick(e) {
   const t = e.target.closest("[data-act]");
   if (!t) return;
   const act = t.dataset.act;
-  if (act === "range") { state.days = t.dataset.v; load(); }
-  else if (act === "metric") { state.metric = t.dataset.v; render(); }
+  if (act === "line") {
+    const k = t.dataset.v;
+    if (state.lines.has(k)) { if (state.lines.size > 1) state.lines.delete(k); } else state.lines.add(k);
+    render();
+  }
   else if (act === "refresh") load();
   else if (act === "form") { state.form = t.dataset.v; render(); }
   else if (act === "channel") { state.channel = state.channel === t.dataset.v ? null : t.dataset.v; render(); if (state.channel) $("web-conv").scrollIntoView({ behavior: "smooth", block: "start" }); }
   else if (act === "clear-channel") { state.channel = null; render(); }
   else if (act === "csv") downloadCsv();
+}
+
+function onChange(e) {
+  const t = e.target;
+  if (t.id === "web-preset") {
+    if (t.value === "custom") { // keep the dates on screen, just unlock them as a custom range
+      state.days = "custom"; state.from = state.data?.from || null; state.to = state.data?.to || null; render();
+      $("web-from")?.focus();
+    } else { state.days = t.value; load(); }
+  } else if (t.id === "web-from" || t.id === "web-to") {
+    const from = $("web-from").value, to = $("web-to").value;
+    if (!from || !to) return;
+    state.days = "custom";
+    [state.from, state.to] = from <= to ? [from, to] : [to, from];
+    load();
+  }
 }
 
 // ----------------------------------------------------------------------------- render
@@ -64,15 +94,26 @@ function render() {
   const d = state.data;
   const chips = (act, list, cur) => list.map(([v, l]) =>
     `<button type="button" class="chip range-chip" data-act="${act}" data-v="${v}" aria-pressed="${v === cur}">${l}</button>`).join("");
+  const from = state.days === "custom" ? state.from : d?.from, to = state.days === "custom" ? state.to : d?.to;
+  const today = d?.today || new Date().toISOString().slice(0, 10);
   let html = `<div class="range-row">
-      <span class="range-label">Window</span>
-      <div class="chip-group" role="group" aria-label="Date range">${chips("range", RANGES, state.days)}</div>
+      <div class="date-control web-dates" role="group" aria-label="Date range">
+        <label for="web-preset">Dates</label>
+        <select id="web-preset">${RANGES.concat([["custom", "Custom range"]]).map(([v, l]) =>
+          `<option value="${v}"${v === state.days ? " selected" : ""}>${l}</option>`).join("")}</select>
+        <span class="date-range">
+          <input type="date" id="web-from" aria-label="From" value="${esc(from || "")}" max="${esc(today)}">
+          <span class="arrow" aria-hidden="true">→</span>
+          <input type="date" id="web-to" aria-label="To" value="${esc(to || "")}" max="${esc(today)}">
+        </span>
+      </div>
       <button type="button" class="btn btn-ghost web-refresh" data-act="refresh"${state.loading ? " disabled" : ""}>${state.loading ? "Loading…" : "Refresh"}</button>
     </div>`;
   if (state.error) html += `<div class="web-banner">Couldn't load website analytics: ${esc(state.error)}</div>`;
   if (!d) { root.innerHTML = html + (state.loading ? `<div class="web-empty">Loading…</div>` : ""); return; }
 
   const T = d.totals, P = d.previous;
+  html += `<div class="${state.loading ? "web-stale" : ""}">`;
   if (!d.first_data) {
     html += `<div class="web-banner">No visits recorded yet. Tracking starts as soon as the website update is live; check back after a few visits.</div>`;
   } else if (d.first_data > d.since) {
@@ -87,13 +128,13 @@ function render() {
     <div class="web-kpi"><div class="v">${pct(T.conversions, T.sessions)}</div><div class="l">Conversion rate</div><div class="s">of visits ended in an enquiry or download</div></div>
   </div>`;
 
-  // Over time
-  const series = d.daily.map((x) => x[state.metric]);
-  const every = Math.max(1, Math.ceil(d.daily.length / 10));
+  // Over time: one line per chosen metric; hover (or arrow keys) shows every metric for that day
   html += `<div class="chart-card web-card">
-    <div class="chart-card-head"><h2>Over time</h2><div class="chip-group">${chips("metric", METRICS, state.metric)}</div></div>
-    ${columnChart(d.daily.map((x) => dayLabel(x.day)), series, { width: 900, height: 240, labelEvery: every, axisFont: 11,
-      title: METRICS.find((m) => m[0] === state.metric)[1] + " per day" })}
+    <div class="chart-card-head"><h2>Over time</h2>
+      <div class="chip-group" role="group" aria-label="Lines shown">${METRICS.map(([k, l]) =>
+        `<button type="button" class="chip web-line-chip" data-act="line" data-v="${k}" aria-pressed="${state.lines.has(k)}">
+          <span class="web-key" style="background:${METRIC_COLOUR[k]}"></span>${l}</button>`).join("")}</div></div>
+    ${lineChart(d)}
   </div>`;
 
   // Acquisition
@@ -166,11 +207,122 @@ function render() {
         <td>${[c.campaign_type, c.area].filter(Boolean).map(esc).join("<br>") || "–"}</td></tr>`),
       state.channel || state.form !== "all" ? "No conversions match this filter." : "No enquiries or guide downloads in this window yet.")}
   </div>
+  </div>
   <p class="web-note">How this is counted: every visit to leapfrogadvertising.com is recorded without cookies or anything stored on the
     visitor's device, so it includes people who decline the cookie banner (Google Analytics only sees those who accept).
     A visit ends after 30 minutes of inactivity. Visitors are counted per day. Each conversion is credited to the source of the
     visit it happened in: Google Ads clicks, UTM-tagged links (e.g. QR codes on billboards), search engines, social sites, other websites, or Direct.</p>`;
   root.innerHTML = html;
+  wireLineChart(d);
+}
+
+// ----------------------------------------------------------------------------- over-time line chart
+const LC = { W: 900, H: 260, ML: 46, MR: 92, MT: 14, MB: 30 };
+
+function lineGeom(d) {
+  const keys = METRICS.map((m) => m[0]).filter((k) => state.lines.has(k));
+  const n = d.daily.length;
+  const plotW = LC.W - LC.ML - LC.MR, plotH = LC.H - LC.MT - LC.MB;
+  const ticks = niceTicks(Math.max(1, ...d.daily.flatMap((x) => keys.map((k) => x[k]))));
+  const yMax = ticks[ticks.length - 1];
+  const xAt = (i) => LC.ML + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2);
+  const yAt = (v) => LC.MT + plotH - (v / yMax) * plotH;
+  return { keys, n, plotW, plotH, ticks, yMax, xAt, yAt };
+}
+
+function lineChart(d) {
+  const { keys, n, ticks, xAt, yAt, plotH } = lineGeom(d);
+  const label = METRICS.filter((m) => keys.includes(m[0])).map((m) => m[1]).join(", ") + " per day";
+  let svg = "";
+  for (const t of ticks) {
+    const y = yAt(t).toFixed(1);
+    svg += `<line x1="${LC.ML}" x2="${LC.W - LC.MR}" y1="${y}" y2="${y}" class="${t === 0 ? "web-base" : "web-grid-line"}"/>`;
+    svg += `<text x="${LC.ML - 8}" y="${(+y + 4).toFixed(1)}" text-anchor="end" class="web-axis">${fmtNum(t)}</text>`;
+  }
+  const every = Math.max(1, Math.ceil(n / 8));
+  d.daily.forEach((x, i) => {
+    if (i % every === 0 || (i === n - 1 && (n - 1) % every > every / 2)) {
+      svg += `<text x="${xAt(i).toFixed(1)}" y="${LC.MT + plotH + 20}" text-anchor="middle" class="web-axis">${esc(dayLabel(x.day))}</text>`;
+    }
+  });
+  // Lines (single points get a dot so a 1-day range still shows something)
+  const ends = [];
+  for (const k of keys) {
+    const pts = d.daily.map((x, i) => `${xAt(i).toFixed(1)},${yAt(x[k]).toFixed(1)}`);
+    svg += n > 1 ? `<polyline points="${pts.join(" ")}" fill="none" stroke="${METRIC_COLOUR[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+      : `<circle cx="${xAt(0)}" cy="${yAt(d.daily[0][k])}" r="4" fill="${METRIC_COLOUR[k]}"/>`;
+    ends.push({ k, y: yAt(d.daily[n - 1][k]) });
+  }
+  // Direct labels at the right end, nudged apart so they never overlap
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 14);
+  const over = ends.length ? ends[ends.length - 1].y - (LC.MT + plotH) : 0;
+  if (over > 0) ends.forEach((e) => (e.y -= over));
+  for (const e of ends) {
+    svg += `<text x="${LC.W - LC.MR + 8}" y="${(e.y + 4).toFixed(1)}" class="web-end">${METRICS.find((m) => m[0] === e.k)[1]}</text>`;
+  }
+  // Hover layer: crosshair + a ringed dot per line, positioned by wireLineChart()
+  svg += `<g class="web-cross" opacity="0"><line y1="${LC.MT}" y2="${LC.MT + plotH}"/>${keys.map((k) =>
+    `<circle r="4.5" data-k="${k}" fill="${METRIC_COLOUR[k]}" stroke="var(--surface)" stroke-width="2"/>`).join("")}</g>`;
+  return `<div class="web-line" id="web-line" tabindex="0" aria-label="${esc(label)}. Hover or use the arrow keys to read each day's numbers.">
+    <svg viewBox="0 0 ${LC.W} ${LC.H}" role="img" aria-label="${esc(label)}">${svg}</svg>
+    <div class="web-tip" role="status" aria-live="polite"></div>
+  </div>`;
+}
+
+function wireLineChart(d) {
+  const box = $("web-line");
+  if (!box || !d.daily.length) return;
+  const svg = box.querySelector("svg"), tip = box.querySelector(".web-tip"), cross = box.querySelector(".web-cross");
+  const { keys, n, plotW, xAt, yAt } = lineGeom(d);
+  let cur = -1;
+  const show = (i) => {
+    cur = i = Math.max(0, Math.min(n - 1, i));
+    const x = d.daily[i], px = xAt(i);
+    cross.setAttribute("opacity", "1");
+    const ln = cross.querySelector("line"); ln.setAttribute("x1", px); ln.setAttribute("x2", px);
+    cross.querySelectorAll("circle").forEach((c) => { c.setAttribute("cx", px); c.setAttribute("cy", yAt(x[c.dataset.k])); });
+    tip.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "web-tip-date";
+    head.textContent = dayLong(x.day) + (x.day === d.today ? " (so far)" : "");
+    tip.append(head);
+    for (const [k, l] of METRICS) {
+      const row = document.createElement("div");
+      row.className = "web-tip-row" + (keys.includes(k) ? "" : " off");
+      const key = document.createElement("span"); key.className = "web-tip-key"; key.style.background = METRIC_COLOUR[k];
+      const v = document.createElement("b"); v.textContent = int(x[k]);
+      const name = document.createElement("span"); name.textContent = l;
+      row.append(key, v, name);
+      tip.append(row);
+    }
+    if (x.sessions) {
+      const r = document.createElement("div"); r.className = "web-tip-foot";
+      r.textContent = `${(x.views / x.sessions).toFixed(1)} pages per visit`;
+      tip.append(r);
+    }
+    // Keep the tooltip inside the card: flip to the left of the crosshair past the midpoint
+    const frac = px / LC.W;
+    tip.style.left = `${frac * 100}%`;
+    tip.classList.toggle("flip", frac > 0.55);
+    tip.classList.add("show");
+  };
+  const hide = () => { cross.setAttribute("opacity", "0"); tip.classList.remove("show"); };
+  const fromPointer = (e) => {
+    const r = svg.getBoundingClientRect();
+    const sx = ((e.clientX - r.left) / r.width) * LC.W;
+    show(n > 1 ? Math.round(((sx - LC.ML) / plotW) * (n - 1)) : 0);
+  };
+  svg.addEventListener("pointermove", fromPointer);
+  svg.addEventListener("pointerdown", fromPointer);
+  svg.addEventListener("pointerleave", () => { if (document.activeElement !== box) hide(); });
+  box.addEventListener("focus", () => show(cur < 0 ? n - 1 : cur));
+  box.addEventListener("blur", hide);
+  box.addEventListener("keydown", (e) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1, Home: -n, End: n }[e.key];
+    if (step) { e.preventDefault(); show((cur < 0 ? n - 1 : cur) + step); }
+    else if (e.key === "Escape") hide();
+  });
 }
 
 function kpi(label, v, prev, sub) {
