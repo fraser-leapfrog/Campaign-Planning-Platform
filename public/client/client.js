@@ -141,19 +141,21 @@ function render() {
   const completeEnd = partial ? addDays(d.through, -1) : d.through;
   const completeDays = days.filter((x) => x.date <= completeEnd);
   const avgPlays = completeDays.length ? completeDays.reduce((a, x) => a + x.plays, 0) / completeDays.length : null;
+  const avgAirtime = completeDays.length ? completeDays.reduce((a, x) => a + x.airtime_s, 0) / completeDays.length : null;
+  const acrossScreens = `across ${m.screens.length} screen${m.screens.length === 1 ? "" : "s"}`;
 
   const tiles = [`<div class="tile feature"><div class="v">${fmtInt(t.plays)}</div><div class="l">Plays</div>
       ${avgPlays !== null ? `<div class="s">${fmtInt(avgPlays)} a day on average</div>` : ""}
       ${d.agreed_pct ? `<span class="badge">+${d.agreed_pct}% above agreed</span>` : ""}</div>`,
     `<div class="tile"><div class="v">${fmtHM(t.airtime_s)}</div><div class="l">Time on screen</div>
-      <div class="s">across ${m.screens.length} screen${m.screens.length === 1 ? "" : "s"}</div></div>`];
+      ${avgAirtime !== null ? `<div class="s">${fmtHM(avgAirtime)} a day on average</div>` : ""}</div>`];
   if (footfall) {
     tiles.push(`<div class="tile"><div class="v">${fmtInt(t.impressions)}</div><div class="l">Potential impressions</div>
       <div class="s">based on footfall by each placement</div></div>`);
   }
   if (today) {
     tiles.push(`<div class="tile"><div class="v">${fmtInt(today.plays)}</div><div class="l">Plays today so far</div>
-      ${footfall ? `<div class="s">${fmtInt(today.impressions)} potential impressions so far</div>` : ""}</div>`);
+      <div class="s">${acrossScreens}</div></div>`);
   }
 
   // Charts are drawn at the card's real width so the labels stay readable on phones.
