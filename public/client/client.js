@@ -15,6 +15,40 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const toDate = (s) => new Date(`${s}T00:00:00Z`);
 const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 86400000);
 const addDays = (s, n) => { const d = toDate(s); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const addMonths = (s, n) => { const d = toDate(s); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Long campaigns get fewer, bigger bars: weekly once the campaign runs 3 months or more, monthly at 6 months or
+// more. Judged on the whole campaign (start to end date), so a chart never changes shape halfway through.
+function chartGrain(start, end) {
+  return end >= addMonths(start, 6) ? "month" : end >= addMonths(start, 3) ? "week" : "day";
+}
+
+// Adds the days up into weeks (7-day blocks from the start date, labelled with their first day) or calendar
+// months. A bar is "part" when some of its days are still to come, or fall outside the campaign.
+function groupDays(days, grain, start, completeEnd) {
+  const groups = new Map();
+  for (const x of days) {
+    let key, first, size;
+    if (grain === "week") {
+      first = addDays(start, Math.floor(daysBetween(start, x.date) / 7) * 7);
+      key = first; size = 7;
+    } else {
+      key = x.date.slice(0, 7); first = `${key}-01`;
+      size = daysBetween(first, addMonths(first, 1));
+    }
+    const g = groups.get(key) || { first, size, plays: 0, impressions: 0, done: 0 };
+    g.plays += x.plays; g.impressions += x.impressions || 0;
+    if (x.date <= completeEnd) g.done += 1;
+    groups.set(key, g);
+  }
+  const list = [...groups.values()];
+  return list.map((g, i) => ({
+    label: grain === "week" ? niceDate(g.first, { year: false })
+      : `${MONTHS[+g.first.slice(5, 7) - 1]}${i === 0 || g.first.slice(5, 7) === "01" ? ` ${g.first.slice(0, 4)}` : ""}`,
+    plays: g.plays, impressions: g.impressions, part: g.done < g.size,
+  }));
+}
 
 let data = null;
 
@@ -159,13 +193,23 @@ function render() {
   }
 
   // Charts are drawn at the card's real width so the labels stay readable on phones.
+  const grain = chartGrain(d.start_date, d.end_date);
+  const bars = grain === "day"
+    ? days.map((x, i) => ({ label: niceDate(x.date, { year: false }), plays: x.plays, impressions: x.impressions || 0,
+        part: partial && i === days.length - 1 }))
+    : groupDays(days, grain, d.start_date, completeEnd);
+  const per = grain === "day" ? "per day" : grain === "week" ? "per week" : "per month";
+  const playsSub = grain === "day" ? "Every time your advert played"
+    : grain === "week" ? "Every time your advert played, week by week" : "Every time your advert played, month by month";
+  const impsSub = "Based on footfall by each placement";
+  const key = bars.some((b) => b.part)
+    ? `<div class="key"><span><i style="background:#510780"></i>Full ${grain}</span><span><i style="background:#c4a1e0"></i>${
+        grain === "day" ? "Today so far" : `Part ${grain}`}</span></div>` : "";
   const dailyCards = `<div class="${footfall ? "grid2" : ""}">
-      <div class="card"><h2>Plays per day</h2><p class="sub">Every time your advert played</p><div class="chart" id="ch-plays"></div>
-        ${partial ? `<div class="key"><span><i style="background:#510780"></i>Full day</span><span><i style="background:#c4a1e0"></i>Today so far</span></div>` : ""}</div>
-      ${footfall ? `<div class="card"><h2>Potential impressions per day</h2><p class="sub">Based on footfall by each placement</p><div class="chart" id="ch-imps"></div>
-        ${partial ? `<div class="key"><span><i style="background:#510780"></i>Full day</span><span><i style="background:#c4a1e0"></i>Today so far</span></div>` : ""}</div>` : ""}
+      <div class="card"><h2>Plays ${per}</h2><p class="sub">${playsSub}</p><div class="chart" id="ch-plays"></div>${key}</div>
+      ${footfall ? `<div class="card"><h2>Potential impressions ${per}</h2><p class="sub">${impsSub}</p><div class="chart" id="ch-imps"></div>${key}</div>` : ""}
     </div>`;
-  const hourlyCard = footfall && completeDays.length ? `<div class="card"><h2>When people pass your screens</h2>
+  const hourlyCard = footfall && completeDays.length ? `<div class="card"><h2>When people are seeing your ads</h2>
       <p class="sub">Average potential impressions per hour of the day, over ${completeDays.length} full day${completeDays.length === 1 ? "" : "s"}</p>
       <div class="chart" id="ch-hours"></div></div>` : "";
 
@@ -191,18 +235,19 @@ function render() {
   $("app").innerHTML = `${hero}${photo}<div class="tiles">${tiles.join("")}</div>${dailyCards}${hourlyCard}${screenTable}${artTable}`;
 
   drawCharts = () => {
-    const labels = days.map((x) => niceDate(x.date, { year: false }));
+    const labels = bars.map((b) => b.label);
+    const partBars = bars.flatMap((b, i) => (b.part ? [i] : []));
     const draw = (id, values, title) => {
       const el = $(id);
       if (!el) return;
       const width = Math.max(260, Math.round(el.clientWidth));
       const axisFont = width < 420 ? 11 : 12;
-      const labelEvery = Math.max(1, Math.ceil(values.length / Math.max(3, Math.floor(width / 70))));
+      const labelEvery = Math.max(1, Math.ceil(values.length / Math.max(3, Math.floor(width / (grain === "month" ? 48 : 70)))));   // month names are short
       el.innerHTML = columnChart(labels, values, { width, height: width < 420 ? 220 : 250, labelEvery, axisFont, title,
-        partialIndex: partial ? values.length - 1 : -1 });
+        partialIndex: partBars });
     };
-    draw("ch-plays", days.map((x) => x.plays), "Plays per day");
-    if (footfall) draw("ch-imps", days.map((x) => x.impressions || 0), "Potential impressions per day");
+    draw("ch-plays", bars.map((b) => b.plays), `Plays ${per}`);
+    if (footfall) draw("ch-imps", bars.map((b) => b.impressions), `Potential impressions ${per}`);
     const hoursEl = $("ch-hours");
     if (hoursEl) {
       const cm = buildModel({ campaign, screens: d.screens, start: d.start_date, end: completeEnd, plays: [],
