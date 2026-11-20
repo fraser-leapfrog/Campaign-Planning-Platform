@@ -1,18 +1,9 @@
 /* Leapfrog Advertising campaign report.
-   Matches the existing Google Slides report: 16:9 slides (960 x 540 pt),
-   Calibri (Carlito, its metric twin) for text, Arial for tables.
-   Positions/sizes below were measured from "Swansea University - Campaign Report". */
-
-/* Digits only (0-9), from Source Sans 3. Carlito draws 6 and 8 about 4-5% taller than 0/4/5,
-   so numbers like 650,484 looked uneven; Source Sans 3's digits are all the same height and close
-   to Calibri's in shape. unicode-range means every letter still comes from Carlito/Calibri. */
-@font-face {
-  font-family: "Report Digits";
-  src: url("/billboard/fonts/source-sans-3-variable.woff2") format("woff2");
-  font-weight: 200 900;
-  font-display: block;
-  unicode-range: U+0030-0039;
-}
+   Layout follows the original Google Slides report: 16:9 slides (960 x 540 pt).
+   Positions/sizes were measured from "Swansea University - Campaign Report".
+   Type is Poppins, as in the Leapfrog Advertising design system (loaded by report.html from /fonts/poppins.css):
+   Semibold 600 for titles and labels, Bold 700 for the big numbers, Regular 400 for small print.
+   Poppins is wider than the Calibri the layout was measured with, so a few sizes are trimmed to fit. */
 
 :root {
   --plum: #2b1533;       /* titles */
@@ -20,8 +11,8 @@
   --purple: #7a1ab5;     /* small labels */
   --mauve: #8b7797;      /* secondary labels, "Source" */
   --lavender: #eee0f5;   /* tiles, rule, table lines */
-  --font: "Report Digits", "Calibri", "Carlito", "Helvetica Neue", Arial, sans-serif;
-  --table-font: Arial, "Helvetica Neue", sans-serif;
+  --font: "Poppins", "Helvetica Neue", Arial, sans-serif;
+  --table-font: var(--font);
 }
 
 @page { size: 960pt 540pt; margin: 0; }
@@ -34,11 +25,11 @@ body { margin: 0; font-family: var(--font); color: #000; }
 .slide:last-child { break-after: auto; page-break-after: auto; }
 
 /* header */
-.brand-tag { position: absolute; left: 43pt; top: 30pt; font-size: 11pt; font-weight: 700; color: var(--purple); }
-.report-tag { position: absolute; right: 35pt; top: 30pt; font-size: 11pt; color: var(--mauve); letter-spacing: 0.01em; }
-.title { position: absolute; left: 43pt; right: 35pt; top: 64pt; margin: 0; font-weight: 700; color: var(--plum);
-         font-size: 26pt; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.title.big { font-size: 34pt; top: 58pt; }
+.brand-tag { position: absolute; left: 43pt; top: 30pt; font-size: 11pt; font-weight: 600; color: var(--purple); }
+.report-tag { position: absolute; right: 35pt; top: 30pt; font-size: 10.5pt; color: var(--mauve); letter-spacing: 0.01em; }
+.title { position: absolute; left: 43pt; right: 35pt; top: 64pt; margin: 0; font-weight: 600; color: var(--plum); letter-spacing: -.015em;
+         font-size: 24pt; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title.big { font-size: 31pt; top: 57pt; }
 .rule { position: absolute; left: 43pt; right: 35pt; top: 101pt; height: 1.5pt; background: var(--lavender); }
 .slide.cover .rule { top: 112pt; }
 
@@ -48,20 +39,20 @@ body { margin: 0; font-family: var(--font); color: #000; }
 
 /* cover: headline number + location rows */
 .headline { position: absolute; left: 501pt; width: 426pt; top: 136pt; text-align: center; }
-.headline .num { font-size: 60pt; font-weight: 700; color: var(--deep); line-height: 1; }
-.headline .label { margin-top: 18pt; font-size: 13pt; font-weight: 700; color: var(--mauve); text-transform: uppercase; }
-.headline .sub { margin-top: 5pt; font-size: 12pt; font-weight: 700; color: var(--purple); }
+.headline .num { font-size: 56pt; font-weight: 700; letter-spacing: -.02em; color: var(--deep); line-height: 1; }
+.headline .label { margin-top: 16pt; font-size: 12pt; font-weight: 600; letter-spacing: .06em; color: var(--mauve); text-transform: uppercase; }
+.headline .sub { margin-top: 5pt; font-size: 11.5pt; font-weight: 600; color: var(--purple); }
 .locations { position: absolute; left: 501pt; width: 426pt; top: 250pt; }
 .loc { display: flex; align-items: center; height: 54pt; background: var(--lavender); border-radius: 6pt;
        padding: 0 18pt; margin-bottom: 10pt; }
 .locations.compact .loc { height: 42pt; margin-bottom: 7pt; }
-.loc .n { width: 114pt; font-size: 24pt; font-weight: 700; color: var(--deep); }
-.locations.compact .loc .n { font-size: 20pt; }
-.loc .name { font-size: 11pt; font-weight: 700; color: var(--purple); }
+.loc .n { width: 124pt; font-size: 22pt; font-weight: 700; letter-spacing: -.01em; color: var(--deep); }
+.locations.compact .loc .n { font-size: 18pt; }
+.loc .name { font-size: 10.5pt; font-weight: 600; line-height: 1.25; color: var(--purple); }
 .cover.nophoto .headline { left: 43pt; width: 882pt; top: 140pt; }
 .cover.nophoto .locations { left: 230pt; width: 500pt; top: 262pt; }
 .cover.nophoto .source { left: 43pt; }
-.source { position: absolute; left: 501pt; top: 492pt; font-size: 13pt; font-weight: 700; color: var(--mauve); }
+.source { position: absolute; left: 501pt; top: 492pt; font-size: 11.5pt; font-weight: 600; color: var(--mauve); }
 .logo { position: absolute; right: 41pt; top: 457pt; width: 202pt; }
 .logo img { width: 100%; display: block; }
 
@@ -70,23 +61,23 @@ body { margin: 0; font-family: var(--font); color: #000; }
 .boxes.n4 { grid-template-columns: repeat(4, 1fr); }
 .boxes.n3 { grid-template-columns: repeat(3, 1fr); }
 .tile { background: var(--lavender); border-radius: 6pt; padding: 15pt 18pt 0; }
-.tile .num { font-size: 30pt; font-weight: 700; color: var(--deep); line-height: 1.05; white-space: nowrap; }
-.tile .label { font-size: 11pt; font-weight: 700; color: var(--purple); text-transform: uppercase; margin-top: 2pt; }
-.tile .sub { font-size: 10pt; color: var(--mauve); margin-top: 4pt; line-height: 1.25; }
-.tile .sub.strong { color: var(--deep); font-weight: 700; font-size: 11pt; }
+.tile .num { font-size: 26pt; font-weight: 700; color: var(--deep); line-height: 1.1; letter-spacing: -.015em; white-space: nowrap; }
+.tile .label { font-size: 10pt; font-weight: 600; letter-spacing: .04em; color: var(--purple); text-transform: uppercase; margin-top: 2pt; }
+.tile .sub { font-size: 9pt; color: var(--mauve); margin-top: 4pt; line-height: 1.3; }
+.tile .sub.strong { color: var(--deep); font-weight: 600; font-size: 10pt; }
 .tile.delivered { box-shadow: inset 0 0 0 2pt var(--purple); }
 .period { background: var(--deep); border-radius: 6pt; padding: 15pt 18pt; color: #fff; }
-.period .label { font-size: 10pt; font-weight: 700; color: var(--lavender); text-transform: uppercase; }
-.period .dates { font-size: 15pt; font-weight: 700; margin-top: 6pt; line-height: 1.15; }
-.period .year { font-size: 15pt; }
-.period .note { font-size: 9pt; color: var(--lavender); margin-top: 5pt; line-height: 1.25; }
+.period .label { font-size: 9.5pt; font-weight: 600; letter-spacing: .04em; color: var(--lavender); text-transform: uppercase; }
+.period .dates { font-size: 14pt; font-weight: 600; margin-top: 6pt; line-height: 1.15; }
+.period .year { font-size: 14pt; }
+.period .note { font-size: 8.5pt; color: var(--lavender); margin-top: 5pt; line-height: 1.25; }
 
 /* table */
 table.perf { position: absolute; left: 43pt; width: 882pt; border-collapse: collapse; table-layout: fixed;
-             font-family: var(--table-font); font-size: 11pt; }
+             font-family: var(--table-font); font-size: 10pt; }
 .detail table.perf { top: 248pt; }
 .continued table.perf { top: 123pt; }
-table.perf th { background: var(--deep); color: #fff; font-weight: 700; text-align: left; height: 28pt;
+table.perf th { background: var(--deep); color: #fff; font-weight: 600; text-align: left; height: 28pt;
                 padding: 0 7pt; border: 1px solid var(--deep); }
 table.perf td { height: 28pt; padding: 0 7pt; border: 1px solid var(--lavender); white-space: nowrap;
                 overflow: hidden; text-overflow: ellipsis; }
@@ -95,20 +86,20 @@ col.c1 { width: 336pt; } col.c2 { width: 254pt; } col.c3 { width: 146pt; } col.c
 /* extra slides: charts + side tiles */
 .panel { position: absolute; top: 123pt; height: 387pt; border: 1.5pt solid var(--lavender); border-radius: 6pt;
          padding: 14pt 16pt 10pt; }
-.panel .cap { font-size: 11pt; font-weight: 700; color: var(--purple); text-transform: uppercase; margin-bottom: 8pt; }
+.panel .cap { font-size: 10pt; font-weight: 600; letter-spacing: .04em; color: var(--purple); text-transform: uppercase; margin-bottom: 8pt; }
 .panel.full { left: 43pt; width: 882pt; }
 .panel.left { left: 43pt; width: 434pt; }
 .panel.right { left: 491pt; width: 434pt; }
 .panel.wide { left: 43pt; width: 624pt; }
 .side { position: absolute; left: 681pt; width: 244pt; }
 .side .tile { width: 244pt; margin-bottom: 13pt; height: 120pt; padding-top: 22pt; }
-.side .tile .num { font-size: 30pt; }
-.side .tile .sub { font-size: 10pt; color: var(--mauve); margin-top: 4pt; }
-.foot-source { position: absolute; left: 43pt; top: 515pt; font-size: 10pt; font-weight: 700; color: var(--mauve); }
+.side .tile .num { font-size: 26pt; }
+.side .tile .sub { font-size: 9pt; color: var(--mauve); margin-top: 4pt; }
+.foot-source { position: absolute; left: 43pt; top: 515pt; font-size: 9.5pt; font-weight: 600; color: var(--mauve); }
 /* Content column: one size for every row of the table (set per report from the longest name) */
-table.perf.content-sm td:first-child { font-size: 9.5pt; }
-table.perf.content-xs td:first-child { font-size: 8.5pt; }
-.ref-key { float: right; text-transform: none; color: var(--plum); font-weight: 700; font-size: 10.5pt; }
+table.perf.content-sm td:first-child { font-size: 8.5pt; }
+table.perf.content-xs td:first-child { font-size: 7.5pt; }
+.ref-key { float: right; text-transform: none; letter-spacing: 0; color: var(--plum); font-weight: 600; font-size: 9.5pt; }
 .ref-key i { display: inline-block; width: 18pt; height: 2.5pt; background: #e43f84; vertical-align: middle;
              margin-right: 6pt; border-radius: 1pt; }
 
@@ -120,7 +111,7 @@ table.perf.content-xs td:first-child { font-size: 8.5pt; }
   .toolbar { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; align-items: center; gap: 14px;
              padding: 12px 20px; background: #2b1533; color: #fff; font: 14px/1.3 var(--font); }
   .toolbar .grow { flex: 1; }
-  .toolbar button { font: 700 14px var(--font); border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer;
+  .toolbar button { font: 600 14px var(--font); border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer;
                     background: #e43f84; color: #fff; }
   .toolbar button:disabled { opacity: .5; cursor: wait; }
   .toolbar .hint { color: #d9c7e6; font-size: 12.5px; }

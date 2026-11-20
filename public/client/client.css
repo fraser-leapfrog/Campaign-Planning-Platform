@@ -1,18 +1,36 @@
 /* Client results page. Leapfrog palette: plum #2b1533, deep purple #510780, purple #7209b7, pink #e43f84,
-   mauve #8b7797, lavender #eee0f5. Arboria is served from /client/lib (the app's own copy). */
-@font-face { font-family: "Arboria"; font-weight: 400; font-display: swap; src: url("lib/Arboria-Book.ttf") format("truetype"); }
-@font-face { font-family: "Arboria"; font-weight: 500; font-display: swap; src: url("lib/Arboria-Medium.ttf") format("truetype"); }
-@font-face { font-family: "Arboria"; font-weight: 700; font-display: swap; src: url("lib/Arboria-Bold.ttf") format("truetype"); }
+   mauve #8b7797, lavender #eee0f5. Type is Poppins, as in the Leapfrog Advertising design system: Light 300 body,
+   Semibold 600 headings and labels, Bold 700 for the big numbers. Served from /client/lib (the app's own copies). */
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 300; font-display: swap;
+  src: url("lib/poppins-300-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 300; font-display: swap;
+  src: url("lib/poppins-300-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("lib/poppins-400-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("lib/poppins-400-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("lib/poppins-500-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("lib/poppins-500-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("lib/poppins-600-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("lib/poppins-600-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("lib/poppins-700-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("lib/poppins-700-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 :root {
   --plum: #2b1533; --deep: #510780; --purple: #7209b7; --pink: #e43f84; --mauve: #8b7797; --lavender: #eee0f5;
   --bg: #f7f4f9; --card: #ffffff; --line: #e7dcef; --text: #22142a; --muted: #6f5f7a;
-  --font: "Arboria", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --radius: 16px;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.5 var(--font); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 300 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
 .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 16px; }
 .num, .tile .v, td.n { font-variant-numeric: tabular-nums; }
 
@@ -35,8 +53,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.5 
 /* ---- hero */
 .hero { margin: 20px 0 18px; border-radius: 22px; color: #fff; padding: 28px 26px 24px;
   background: radial-gradient(120% 140% at 100% 0%, #7a1ab5 0%, var(--deep) 45%, var(--plum) 100%); position: relative; overflow: hidden; }
-.hero .eyebrow { font-size: 12.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #ffb3d2; margin: 0 0 6px; }
-.hero h1 { margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: -.01em; line-height: 1.05;
+.hero .eyebrow { font-size: 12.5px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: #ffb3d2; margin: 0 0 6px; }
+.hero h1 { margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: -.015em; line-height: 1.05;
   font-size: clamp(28px, 6vw, 46px); overflow-wrap: anywhere; }
 .hero .dates { margin: 8px 0 0; color: #e6d6f1; font-size: 15px; }
 .progress { margin-top: 18px; max-width: 520px; }
@@ -50,9 +68,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.5 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px; }
 .tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
 .tile .v { font-size: clamp(28px, 5vw, 38px); font-weight: 700; color: var(--deep); line-height: 1.05; letter-spacing: -.01em; }
-.tile .l { margin-top: 6px; font-size: 12.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.tile .l { margin-top: 6px; font-size: 12.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
 .tile .s { margin-top: 8px; font-size: 14px; color: var(--muted); }
-.badge { display: inline-block; margin-top: 10px; border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 700;
+.badge { display: inline-block; margin-top: 10px; border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 600;
   background: color-mix(in srgb, #1f9d63 13%, #fff); color: #157a4b; }
 .tile.feature { background: linear-gradient(180deg, #fff, #fbf7fd); border-color: color-mix(in srgb, var(--purple) 28%, var(--line)); }
 
@@ -60,7 +78,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.5 
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 14px; min-width: 0; margin-bottom: 18px; }
 .grid2 .card { margin-bottom: 0; }
-.card h2 { margin: 0 0 2px; font-size: 15px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--plum); }
+.card h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--plum); }
 .card .sub { margin: 0 0 12px; font-size: 13.5px; color: var(--muted); }
 .chart { width: 100%; min-height: 220px; color: var(--muted); }
 .key { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
@@ -69,9 +87,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.5 
 /* ---- tables */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
-th { text-align: left; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+th { text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
   padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-weight: 400; }
 tr:last-child td { border-bottom: 0; }
 th.n, td.n { text-align: right; white-space: nowrap; }
 td.name { overflow-wrap: anywhere; min-width: 160px; }
@@ -79,13 +97,13 @@ td .small { display: block; font-size: 12.5px; color: var(--muted); }
 
 /* ---- messages + sign-in */
 .loading, .notice { text-align: center; color: var(--muted); padding: 60px 16px; }
-.notice h1 { color: var(--plum); font-size: 24px; text-transform: uppercase; margin: 0 0 8px; }
+.notice h1 { color: var(--plum); font-size: 24px; font-weight: 600; text-transform: uppercase; margin: 0 0 8px; }
 .signin { max-width: 400px; margin: 56px auto; background: var(--card); border: 1px solid var(--line); border-radius: 20px;
   padding: 30px 26px; box-shadow: 0 18px 50px rgba(43, 21, 51, .08); }
-.signin h1 { margin: 0 0 6px; font-size: 22px; text-transform: uppercase; letter-spacing: .01em; color: var(--plum); }
+.signin h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; text-transform: uppercase; letter-spacing: .01em; color: var(--plum); }
 .signin p { margin: 0 0 18px; color: var(--muted); font-size: 15px; }
-.signin label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
-.signin input { width: 100%; font: inherit; font-size: 17px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+.signin label { display: block; font-size: 13px; font-weight: 400; margin-bottom: 6px; }
+.signin input { width: 100%; font: inherit; font-weight: 400; font-size: 17px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
   background: #fff; color: var(--text); }
 .signin input:focus { outline: 2px solid color-mix(in srgb, var(--purple) 45%, transparent); outline-offset: 1px; border-color: var(--purple); }
 .btn { display: inline-block; width: 100%; margin-top: 14px; font: inherit; font-weight: 500; font-size: 16px; padding: 12px 18px;

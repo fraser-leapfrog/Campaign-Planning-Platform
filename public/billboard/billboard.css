@@ -91,7 +91,7 @@
 #view-billboard table.bb-screens select { min-width: 190px; }
 
 /* report to-do list */
-#view-billboard .bb-group-head { font-family: var(--font-head); font-weight: 700; font-size: 12px; text-transform: uppercase;
+#view-billboard .bb-group-head { font-family: var(--font-head); font-weight: 600; font-size: 12px; text-transform: uppercase;
   letter-spacing: .06em; color: var(--text-muted); margin: 10px 2px 2px; display: flex; align-items: center; gap: 8px; }
 #view-billboard .bb-group-head:first-child { margin-top: 0; }
 #view-billboard .bb-count { font-family: var(--font-body); font-weight: 500; letter-spacing: 0; background: var(--surface-2);

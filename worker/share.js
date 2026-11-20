@@ -284,10 +284,13 @@ const CLIENT_LIB = {
   "charts.js": "/billboard/charts.js",
   "logo.png": "/logo.png",
   "icon.png": "/icon.png",
-  "Arboria-Book.ttf": "/fonts/Arboria-Book.ttf",
-  "Arboria-Medium.ttf": "/fonts/Arboria-Medium.ttf",
-  "Arboria-Bold.ttf": "/fonts/Arboria-Bold.ttf",
 };
+// Poppins (the design-system typeface): every weight the page uses, Latin + Latin Extended.
+for (const w of [300, 400, 500, 600, 700]) {
+  for (const subset of ["latin", "latin-ext"]) {
+    CLIENT_LIB[`poppins-${w}-${subset}.woff2`] = `/fonts/poppins/poppins-${w}-${subset}.woff2`;
+  }
+}
 
 const PRIVATE_HEADERS = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer" };
 
