@@ -22,6 +22,9 @@ export const WEB_SCHEMA = [
      page TEXT, campaign_type TEXT, area TEXT, name TEXT, company TEXT, dedupe TEXT UNIQUE,
      channel TEXT, source TEXT, medium TEXT, campaign TEXT, landing TEXT, referrer TEXT, device TEXT)`,
   `CREATE INDEX IF NOT EXISTS web_conversions_ts ON web_conversions (ts)`,
+  // Daily abuse cap: hits stored per UK day ("YYYY-MM-DD:v" page views, "YYYY-MM-DD:c" conversions).
+  // Written only by the website Worker; The Pond doesn't read it.
+  `CREATE TABLE IF NOT EXISTS web_budget (day TEXT PRIMARY KEY, hits INTEGER NOT NULL DEFAULT 0)`,
 ];
 
 export async function ensureWebSchema(db) {

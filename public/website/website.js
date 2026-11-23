@@ -346,7 +346,14 @@ function downloadCsv() {
   if (state.form !== "all") conv = conv.filter((c) => (state.form === "guide") === (c.form === "guide"));
   if (state.channel) conv = conv.filter((c) => (c.channel || "Direct") === state.channel);
   const cols = ["when", "type", "name", "company", "channel", "source", "medium", "campaign", "landing_page", "referrer", "converted_on", "campaign_type", "area", "device"];
-  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  // Names, companies and UTM values come from the public website, so anyone can set them. A value
+  // starting with = + - @ (or a tab / carriage return) would run as a formula when the CSV is opened
+  // in Excel or Sheets; a leading apostrophe makes the spreadsheet treat it as plain text.
+  const q = (v) => {
+    let s = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const lines = [cols.join(",")].concat(conv.map((c) => [when(c.ts), FORM_LABEL[c.form] || c.form, c.name, c.company, c.channel, c.source,
     c.medium, c.campaign, c.landing, c.referrer, c.page, c.campaign_type, c.area, c.device].map(q).join(",")));
   const a = document.createElement("a");
