@@ -81,7 +81,8 @@ table.perf th { background: var(--deep); color: #fff; font-weight: 600; text-ali
                 padding: 0 7pt; border: 1px solid var(--deep); }
 table.perf td { height: 28pt; padding: 0 7pt; border: 1px solid var(--lavender); white-space: nowrap;
                 overflow: hidden; text-overflow: ellipsis; }
-col.c1 { width: 336pt; } col.c2 { width: 254pt; } col.c3 { width: 146pt; } col.c4 { width: 146pt; }
+/* Content gets most of the width: artwork names are long, locations and numbers are short. */
+col.c1 { width: 456pt; } col.c2 { width: 166pt; } col.c3 { width: 116pt; } col.c4 { width: 144pt; }
 
 /* extra slides: charts + side tiles */
 .panel { position: absolute; top: 123pt; height: 387pt; border: 1.5pt solid var(--lavender); border-radius: 6pt;
@@ -96,9 +97,8 @@ col.c1 { width: 336pt; } col.c2 { width: 254pt; } col.c3 { width: 146pt; } col.c
 .side .tile .num { font-size: 26pt; }
 .side .tile .sub { font-size: 9pt; color: var(--mauve); margin-top: 4pt; }
 .foot-source { position: absolute; left: 43pt; top: 515pt; font-size: 9.5pt; font-weight: 600; color: var(--mauve); }
-/* Content column: one size for every row of the table (set per report from the longest name) */
-table.perf.content-sm td:first-child { font-size: 8.5pt; }
-table.perf.content-xs td:first-child { font-size: 7.5pt; }
+/* Table text size: 10pt, or smaller for long content names (report.js sets it on the whole table). */
+table.perf th, table.perf td { font-size: inherit; }
 .ref-key { float: right; text-transform: none; letter-spacing: 0; color: var(--plum); font-weight: 600; font-size: 9.5pt; }
 .ref-key i { display: inline-block; width: 18pt; height: 2.5pt; background: #e43f84; vertical-align: middle;
              margin-right: 6pt; border-radius: 1pt; }

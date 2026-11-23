@@ -16,15 +16,21 @@ function header(title, big = false) {
     <h1 class="title${big ? " big" : ""}">${esc(title)}</h1><div class="rule"></div>`;
 }
 
-// One text size for the whole Content column, on every slide of the table, picked from the
-// longest name, so every content name is formatted the same.
-function contentSizeClass(rows) {
-  const longest = Math.max(0, ...rows.map((r) => r.artwork.length));
-  return longest <= 42 ? "" : longest <= 50 ? " content-sm" : " content-xs";
+// Every table cell (headers included, on every slide of the table) uses one text size: the biggest
+// that fits the longest content name on one line. Measured once the fonts have loaded.
+const TABLE_SIZES_PT = [10, 9.5, 9, 8.5, 8, 7.5];
+function fitTableText() {
+  const tables = [...document.querySelectorAll("table.perf")];
+  if (!tables.length) return;
+  const names = tables.flatMap((t) => [...t.querySelectorAll("td:first-child")]);
+  for (const size of TABLE_SIZES_PT) {
+    for (const t of tables) t.style.fontSize = `${size}pt`;
+    if (names.every((td) => td.scrollWidth <= td.clientWidth)) return;
+  }
 }
 
-function perfTable(rows, sizeClass = "") {
-  return `<table class="perf${sizeClass}"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>
+function perfTable(rows) {
+  return `<table class="perf"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>
     <thead><tr><th>Content</th><th>Location</th><th>Total Plays</th><th>Total Time Played</th></tr></thead><tbody>
     ${rows.map((r) => `<tr><td>${esc(r.artwork)}</td><td>${esc(r.screen)}</td>
       <td>${fmtInt(r.plays)}</td><td>${fmtHMS(r.airtime_s)}</td></tr>`).join("")}</tbody></table>`;
@@ -66,7 +72,6 @@ function buildSlides(model, photo) {
   const note = model.isComplete ? "" : `Interim report. The campaign runs until ${longDate(c.end_date)}.`;
   let rows = model.byArtworkScreen();
   if (!rows.length) rows = [{ artwork: "No plays found", screen: "", plays: 0, airtime_s: 0 }];
-  const sizeClass = contentSizeClass(rows);
   const pages = [rows.slice(0, ROWS_FIRST_SLIDE)];
   for (let i = ROWS_FIRST_SLIDE; i < rows.length; i += ROWS_PER_SLIDE) pages.push(rows.slice(i, i + ROWS_PER_SLIDE));
   out.push(`<div class="slide detail">${header("Campaign Performance Detail")}
@@ -78,9 +83,9 @@ function buildSlides(model, photo) {
       <div class="period"><div class="label">Reporting Period</div><div class="dates">${esc(period.dates)}</div>
         <div class="year">${esc(period.year)}</div>${note ? `<div class="note">${esc(note)}</div>` : ""}</div>
     </div>
-    ${perfTable(pages[0], sizeClass)}</div>`);
+    ${perfTable(pages[0])}</div>`);
   for (const p of pages.slice(1)) {
-    out.push(`<div class="slide continued">${header("Campaign Performance Detail (continued)")}${perfTable(p, sizeClass)}</div>`);
+    out.push(`<div class="slide continued">${header("Campaign Performance Detail (continued)")}${perfTable(p)}</div>`);
   }
 
   // ---- optional extra slides: daily performance + footfall by time of day, either for the whole
@@ -168,6 +173,7 @@ async function main() {
   $("tb-title").textContent = `${model.campaign.client_name} · ${model.isComplete ? "Final" : "Interim"} report`;
   $("status").remove();
   await document.fonts.ready;
+  fitTableText();
   await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }))));
   $("save-pdf").disabled = false;
   $("save-pdf").addEventListener("click", () => window.print());
