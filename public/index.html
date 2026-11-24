@@ -41,6 +41,8 @@
     --st-orange: #c96f21;
     --st-blue: #3376b8;
     --st-pink: var(--pink);
+    /* Brand pillars (Marketing Planner) */
+    --pl-trust: #7209b7; --pl-community: #d0306f; --pl-visibility: #0b7f86;
 
     --radius-s: 6px;
     --radius-m: 10px;
@@ -60,6 +62,7 @@
       --live: #3fbf85; --upcoming: #a586f0; --past: #8f84a1;
       --st-green: #3fbf85; --st-violet: #a586f0; --st-red: #ef6f5f; --st-yellow: #d9ad3c;
       --st-gray: #9c92ac; --st-orange: #e0913f; --st-blue: #5fa4de;
+      --pl-trust: #b07cf0; --pl-community: #f06ba0; --pl-visibility: #3cc3c9;
       color-scheme: dark;
     }
   }
@@ -69,6 +72,7 @@
     --live: #3fbf85; --upcoming: #a586f0; --past: #8f84a1;
     --st-green: #3fbf85; --st-violet: #a586f0; --st-red: #ef6f5f; --st-yellow: #d9ad3c;
     --st-gray: #9c92ac; --st-orange: #e0913f; --st-blue: #5fa4de;
+    --pl-trust: #b07cf0; --pl-community: #f06ba0; --pl-visibility: #3cc3c9;
     color-scheme: dark;
   }
   :root[data-theme="light"] {
@@ -77,6 +81,7 @@
     --live: #24825a; --upcoming: #8354e0; --past: #948aa3;
     --st-green: #24825a; --st-violet: #8354e0; --st-red: #d94f3f; --st-yellow: #af8412;
     --st-gray: #726a80; --st-orange: #c96f21; --st-blue: #3376b8;
+    --pl-trust: #7209b7; --pl-community: #d0306f; --pl-visibility: #0b7f86;
     color-scheme: light;
   }
 
@@ -535,6 +540,58 @@
 
   /* ---------- Marketing Planner (separate tool from the campaign board) ---------- */
   .idea-board-card { margin-bottom: 20px; }
+
+  /* ---------- Brand pillars (Marketing Planner) ---------- */
+  .pillars-card { margin: 24px 0 20px; }
+  .pillars-card .chart-card-head .pillars-sub { font-size: 12.5px; color: var(--text-muted); }
+  .pillars-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 760px) { .pillars-grid { grid-template-columns: 1fr; } }
+  .pillar {
+    --c: var(--pl-trust);
+    border: 1px solid color-mix(in srgb, var(--c) var(--tint-b), var(--line));
+    background: color-mix(in srgb, var(--c) 5%, var(--surface));
+    border-top: 4px solid var(--c);
+    border-radius: var(--radius-m); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  }
+  .pillar[data-pillar="Community"] { --c: var(--pl-community); }
+  .pillar[data-pillar="Visibility"] { --c: var(--pl-visibility); }
+  .pillar h3 {
+    margin: 0; font-family: var(--font-head); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; font-size: 15px; color: var(--c);
+  }
+  .pillar p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+  .pillar-meta {
+    margin-top: auto; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--c) var(--tint-b), var(--line));
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text-muted);
+  }
+  .pillar-count { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--c); font-size: 13px; white-space: nowrap; }
+  .pillar-mix { margin-top: 16px; }
+  .pillar-mix-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 10px; margin-top: 6px; }
+  .pillar-mix-label { font-size: 12px; color: var(--text-muted); }
+  .pillar-mix-bar {
+    display: flex; height: 12px; border-radius: 999px; overflow: hidden; gap: 2px;
+    background: var(--surface-2); border: 1px solid var(--line);
+  }
+  .pillar-mix-bar span { display: block; height: 100%; min-width: 0; }
+  .pillar-mix-bar span[data-pillar="Trust"] { background: var(--pl-trust); }
+  .pillar-mix-bar span[data-pillar="Community"] { background: var(--pl-community); }
+  .pillar-mix-bar span[data-pillar="Visibility"] { background: var(--pl-visibility); }
+  .pillar-mix-note { margin: 8px 0 0; font-size: 12px; color: var(--text-muted); }
+  /* Brand-pillar dots on calendar entries */
+  .cal-pillar-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px;
+    box-shadow: 0 0 0 1px var(--surface);
+  }
+  .cal-pillar-dot[data-pillar="Trust"] { background: var(--pl-trust); }
+  .cal-pillar-dot[data-pillar="Community"] { background: var(--pl-community); }
+  .cal-pillar-dot[data-pillar="Visibility"] { background: var(--pl-visibility); }
+  /* Brand-pillar chips in the pencil-in form take their pillar colour when picked */
+  #mkt-brand-pillar-group .chip[aria-pressed="true"][data-value="Trust"] { --c: var(--pl-trust); }
+  #mkt-brand-pillar-group .chip[aria-pressed="true"][data-value="Community"] { --c: var(--pl-community); }
+  #mkt-brand-pillar-group .chip[aria-pressed="true"][data-value="Visibility"] { --c: var(--pl-visibility); }
+  #mkt-brand-pillar-group .chip[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--c) var(--tint-a), var(--surface)); border-color: var(--c); color: var(--c);
+  }
   .idea-form { display: flex; gap: 10px; margin-bottom: 16px; }
   .idea-form input { flex: 1; }
   /* One tidy row per idea (not wrapped chips) — just the title, click a row (or
@@ -808,8 +865,27 @@
     <div class="page-head">
       <p class="eyebrow">Marketing Planner</p>
       <h1>Marketing Planner</h1>
-      <p>Leapfrog's own marketing — completely separate from the Campaign Board above. Jot ideas down, then pencil the actual plan onto the calendar.</p>
+      <p>Leapfrog's own marketing — completely separate from the Campaign Board above. Jot ideas down, then pencil the actual plan onto the calendar. Tag every post with a brand pillar so the month stays balanced.</p>
     </div>
+
+    <section class="chart-card pillars-card" aria-labelledby="pillars-title">
+      <div class="chart-card-head">
+        <h2 id="pillars-title">Brand pillars</h2>
+        <span class="pillars-sub" id="pillars-month-label"></span>
+      </div>
+      <div class="pillars-grid" id="pillars-grid"></div>
+      <div class="pillar-mix">
+        <div class="pillar-mix-row">
+          <span class="pillar-mix-label" id="pillar-mix-actual-label">This month</span>
+          <div class="pillar-mix-bar" id="pillar-mix-actual" role="img"></div>
+        </div>
+        <div class="pillar-mix-row">
+          <span class="pillar-mix-label">Aim</span>
+          <div class="pillar-mix-bar" id="pillar-mix-aim" role="img"></div>
+        </div>
+        <p class="pillar-mix-note" id="pillar-mix-note"></p>
+      </div>
+    </section>
 
     <div class="chart-card idea-board-card">
       <div class="chart-card-head">
@@ -1033,8 +1109,17 @@
       </div>
 
       <div class="field">
-        <span class="field-label">Pillar <span class="field-hint">— pick any that apply</span></span>
-        <div class="chip-group" id="mkt-pillar-group" role="group" aria-label="Pillar">
+        <span class="field-label">Brand pillar <span class="field-hint">— Trust, Community or Visibility</span></span>
+        <div class="chip-group" id="mkt-brand-pillar-group" role="group" aria-label="Brand pillar">
+          <button type="button" class="chip" data-value="Trust" aria-pressed="false">Trust</button>
+          <button type="button" class="chip" data-value="Community" aria-pressed="false">Community</button>
+          <button type="button" class="chip" data-value="Visibility" aria-pressed="false">Visibility</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Content pillar <span class="field-hint">— pick any that apply</span></span>
+        <div class="chip-group" id="mkt-pillar-group" role="group" aria-label="Content pillar">
           <button type="button" class="chip" data-value="People &amp; Community" aria-pressed="false">People &amp; Community</button>
           <button type="button" class="chip" data-value="Marketing &amp; Advertising Insights" aria-pressed="false">Marketing &amp; Advertising Insights</button>
           <button type="button" class="chip" data-value="Brand Growth &amp; Results" aria-pressed="false">Brand Growth &amp; Results</button>
@@ -1222,6 +1307,7 @@
     mktFStatus: document.getElementById('mkt-f-status'),
     mktFNotes: document.getElementById('mkt-f-notes'),
     mktPillarGroup: document.getElementById('mkt-pillar-group'),
+    mktBrandPillarGroup: document.getElementById('mkt-brand-pillar-group'),
     ideaModalToCal: document.getElementById('idea-modal-to-cal'),
     ideaModalBackdrop: document.getElementById('idea-modal-backdrop'),
     ideaModalClose: document.getElementById('idea-modal-close'),
@@ -2608,7 +2694,88 @@
     return map;
   }
 
+  // Leapfrog's brand pillars. Descriptions are the agreed wording; day + aim are the
+  // planning rhythm (Mon/Wed/Fri, roughly 40/30/30) suggested alongside them.
+  const BRAND_PILLARS = [
+    { name: 'Trust', day: 'Wednesdays', aim: 30,
+      text: 'Building genuine relationships through honesty, reliability, transparency and a personal approach. Going above and beyond for clients and delivering on what we promise.' },
+    { name: 'Community', day: 'Fridays', aim: 30,
+      text: 'Supporting Welsh businesses, championing local areas and connecting brands with the communities around them.' },
+    { name: 'Visibility', day: 'Mondays', aim: 40,
+      text: 'Helping brands get noticed through superior advertising locations, high-footfall environments and integrated advertising opportunities.' },
+  ];
+
+  function renderPillars() {
+    const y = calendarMonth.getFullYear(), m = calendarMonth.getMonth();
+    const monthName = calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    const inMonth = MKT_ROWS.filter(r => {
+      if (!r.date) return false;
+      const [ry, rm] = r.date.split('-').map(Number);
+      return ry === y && rm - 1 === m;
+    });
+    const counts = Object.fromEntries(BRAND_PILLARS.map(p => [p.name, 0]));
+    let untagged = 0;
+    inMonth.forEach(r => {
+      const bp = (r.brand_pillars || []).filter(p => p in counts);
+      if (!bp.length) untagged++;
+      bp.forEach(p => counts[p]++);
+    });
+    const totalTags = Object.values(counts).reduce((a, b) => a + b, 0);
+
+    document.getElementById('pillars-month-label').textContent = `Mix for ${monthName} · follows the calendar below`;
+    const grid = document.getElementById('pillars-grid');
+    grid.innerHTML = '';
+    BRAND_PILLARS.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'pillar';
+      card.dataset.pillar = p.name;
+      const h = document.createElement('h3'); h.textContent = p.name;
+      const t = document.createElement('p'); t.textContent = p.text;
+      const meta = document.createElement('div'); meta.className = 'pillar-meta';
+      const when = document.createElement('span'); when.textContent = `${p.day} · aim ~${p.aim}%`;
+      const n = document.createElement('span'); n.className = 'pillar-count';
+      const pct = totalTags ? Math.round(counts[p.name] / totalTags * 100) : 0;
+      n.textContent = `${counts[p.name]} ${counts[p.name] === 1 ? 'post' : 'posts'}${totalTags ? ` · ${pct}%` : ''}`;
+      meta.append(when, n);
+      card.append(h, t, meta);
+      grid.appendChild(card);
+    });
+
+    const fillBar = (bar, parts) => {
+      bar.innerHTML = '';
+      parts.filter(([, v]) => v > 0).forEach(([name, v]) => {
+        const seg = document.createElement('span');
+        seg.dataset.pillar = name;
+        seg.style.flex = `${v} 1 0`;
+        bar.appendChild(seg);
+      });
+    };
+    const actual = document.getElementById('pillar-mix-actual');
+    fillBar(actual, BRAND_PILLARS.map(p => [p.name, counts[p.name]]));
+    actual.setAttribute('aria-label', totalTags
+      ? 'This month: ' + BRAND_PILLARS.map(p => `${p.name} ${Math.round(counts[p.name] / totalTags * 100)}%`).join(', ')
+      : 'This month: nothing tagged yet');
+    const aim = document.getElementById('pillar-mix-aim');
+    fillBar(aim, BRAND_PILLARS.map(p => [p.name, p.aim]));
+    aim.setAttribute('aria-label', 'Aim: ' + BRAND_PILLARS.map(p => `${p.name} ${p.aim}%`).join(', '));
+
+    const note = document.getElementById('pillar-mix-note');
+    if (!inMonth.length) note.textContent = `Nothing on the calendar for ${monthName} yet.`;
+    else if (!totalTags) note.textContent = `None of the ${inMonth.length} entries this month has a brand pillar yet. Open one and pick Trust, Community or Visibility.`;
+    else {
+      const short = BRAND_PILLARS
+        .map(p => ({ ...p, gap: p.aim - counts[p.name] / totalTags * 100 }))
+        .sort((a, b) => b.gap - a.gap)[0];
+      const parts = [];
+      if (short.gap >= 10) parts.push(`${short.name} is light this month — worth adding a ${short.name.toLowerCase()} post.`);
+      else parts.push('The mix is close to the aim.');
+      if (untagged) parts.push(`${untagged} ${untagged === 1 ? 'entry has' : 'entries have'} no brand pillar yet.`);
+      note.textContent = parts.join(' ');
+    }
+  }
+
   function renderCalendar() {
+    renderPillars();
     els.calTitle.textContent = calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     const byDate = mktRowsByDate();
     const todayIso = isoDate(todayMidnight());
@@ -2646,8 +2813,15 @@
           const chip = document.createElement('div');
           chip.className = 'calendar-entry';
           if (entry.status) chip.dataset.status = entry.status;
-          chip.textContent = entry.name;
-          chip.title = entry.name;
+          const bp = entry.brand_pillars || [];
+          bp.filter(p => BRAND_PILLARS.some(b => b.name === p)).forEach(p => {
+            const dot = document.createElement('span');
+            dot.className = 'cal-pillar-dot';
+            dot.dataset.pillar = p;
+            chip.appendChild(dot);
+          });
+          chip.appendChild(document.createTextNode(entry.name));
+          chip.title = bp.length ? `${entry.name} · ${bp.join(', ')}` : entry.name;
           chip.addEventListener('click', (e) => {
             e.stopPropagation();
             openMktModal({ mode: 'edit', row: entry });
@@ -2695,7 +2869,7 @@
   function getChips(group) {
     return [...group.querySelectorAll('.chip[aria-pressed="true"]')].map(c => c.dataset.value);
   }
-  [els.mktTypeGroup, els.mktPillarGroup].forEach(group => group.addEventListener('click', (e) => {
+  [els.mktTypeGroup, els.mktPillarGroup, els.mktBrandPillarGroup].forEach(group => group.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
     chip.setAttribute('aria-pressed', String(chip.getAttribute('aria-pressed') !== 'true'));
@@ -2718,6 +2892,7 @@
     els.mktFStatus.value = (mode === 'edit' && row.status) || '';
     els.mktFNotes.value = mode === 'edit' ? (row.notes || '') : (notes || '');
     setChips(els.mktPillarGroup, mode === 'edit' ? row.pillars : []);
+    setChips(els.mktBrandPillarGroup, mode === 'edit' ? row.brand_pillars : []);
     els.mktFCopy.value = (mode === 'edit' && row.post_copy) || '';
     updateCopyCount();
     els.mktModalBackdrop.classList.add('open');
@@ -2748,6 +2923,7 @@
       status: els.mktFStatus.value || null,
       notes: els.mktFNotes.value.trim() || null,
       pillars: getChips(els.mktPillarGroup),
+      brand_pillars: getChips(els.mktBrandPillarGroup),
     };
     try {
       if (editingMktId) await patchMktRow(editingMktId, fields);

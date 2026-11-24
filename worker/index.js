@@ -334,13 +334,16 @@ async function handleIdeaDelete(request, env, id) {
 
 // Content pillars a calendar entry can belong to (several at once). Stored as a JSON array.
 const MARKETING_PILLARS = ["People & Community", "Marketing & Advertising Insights", "Brand Growth & Results"];
+// Leapfrog's three brand pillars (separate from the content pillars above). Also a JSON array.
+const BRAND_PILLARS = ["Trust", "Community", "Visibility"];
 
 // Columns added after the first release: add them to the existing table once.
 //   pillars   — JSON array of MARKETING_PILLARS (multi-select)
 //   types     — JSON array of channels (Email / LinkedIn / Instagram, multi-select). Replaces the
 //               single `type` column, which is copied across once when `types` is first added.
 //   post_copy — the text that goes out with the post
-const MARKETING_ADDED_COLUMNS = ["pillars", "types", "post_copy"];
+//   brand_pillars — JSON array of BRAND_PILLARS (multi-select)
+const MARKETING_ADDED_COLUMNS = ["pillars", "types", "post_copy", "brand_pillars"];
 let marketingSchemaReady = false;
 async function ensureMarketingSchema(env) {
   if (marketingSchemaReady) return;
@@ -362,9 +365,9 @@ async function ensureMarketingSchema(env) {
   marketingSchemaReady = true;
 }
 
-function cleanPillars(v) {
+function cleanPillars(v, allowed = MARKETING_PILLARS) {
   if (!Array.isArray(v)) return null;
-  const out = MARKETING_PILLARS.filter((p) => v.includes(p));
+  const out = allowed.filter((p) => v.includes(p));
   return out.length ? JSON.stringify(out) : null;
 }
 
@@ -389,11 +392,13 @@ async function handleMarketingList(request, env) {
   await ensureMarketingSchema(env);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, name, date, end_date, types, status, notes, post_copy, pillars
+    `SELECT id, name, date, end_date, types, status, notes, post_copy, pillars, brand_pillars
      FROM marketing_calendar
      ORDER BY date`
   ).all();
-  return json(results.map((r) => ({ ...r, types: parseJsonList(r.types), pillars: parseJsonList(r.pillars) })));
+  return json(results.map((r) => ({
+    ...r, types: parseJsonList(r.types), pillars: parseJsonList(r.pillars), brand_pillars: parseJsonList(r.brand_pillars),
+  })));
 }
 
 async function handleMarketingCreate(request, env) {
@@ -409,11 +414,12 @@ async function handleMarketingCreate(request, env) {
 
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO marketing_calendar (id, name, date, end_date, types, status, notes, post_copy, pillars)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+    `INSERT INTO marketing_calendar (id, name, date, end_date, types, status, notes, post_copy, pillars, brand_pillars)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
   )
     .bind(id, body.name.trim(), normaliseDate(body.date), normaliseDate(body.end_date) || null, cleanTypes(body.types),
-      body.status || null, body.notes || null, body.post_copy || null, cleanPillars(body.pillars))
+      body.status || null, body.notes || null, body.post_copy || null, cleanPillars(body.pillars),
+      cleanPillars(body.brand_pillars, BRAND_PILLARS))
     .run();
 
   return json({ id }, 201);
@@ -425,7 +431,7 @@ async function handleMarketingPatch(request, env, id) {
 
   const body = await request.json();
   await ensureMarketingSchema(env);
-  const colByField = { name: "name", date: "date", end_date: "end_date", types: "types", status: "status", notes: "notes", post_copy: "post_copy", pillars: "pillars" };
+  const colByField = { name: "name", date: "date", end_date: "end_date", types: "types", status: "status", notes: "notes", post_copy: "post_copy", pillars: "pillars", brand_pillars: "brand_pillars" };
 
   const sets = [];
   const values = [];
@@ -434,6 +440,7 @@ async function handleMarketingPatch(request, env, id) {
     sets.push(`${col} = ?`);
     values.push(field === "date" || field === "end_date" ? normaliseDate(body[field])
       : field === "pillars" ? cleanPillars(body[field])
+      : field === "brand_pillars" ? cleanPillars(body[field], BRAND_PILLARS)
       : field === "types" ? cleanTypes(body[field])
       : body[field]);
   }
