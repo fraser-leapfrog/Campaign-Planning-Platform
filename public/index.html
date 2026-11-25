@@ -215,12 +215,12 @@
   .controls { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .search-wrap { position: relative; flex: 1; min-width: 200px; }
   .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
-  input[type="search"], input[type="text"], input[type="date"], select, textarea {
+  input[type="search"], input[type="text"], input[type="date"], input[type="number"], select, textarea {
     font-family: var(--font-body); font-size: 14px; color: var(--text);
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s);
     padding: 10px 12px; outline: none; box-sizing: border-box;
   }
-  input[type="search"], input[type="text"], input[type="date"], select {
+  input[type="search"], input[type="text"], input[type="date"], input[type="number"], select {
     height: 42px;
   }
   textarea { height: auto; min-height: 72px; resize: vertical; line-height: 1.5; width: 100%; }
@@ -314,6 +314,24 @@
   .campaign-dates { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text); white-space: nowrap; }
   .campaign-relative { font-size: 12px; color: var(--section-c); font-weight: 500; margin-top: 2px; }
 
+  /* Subscription deals: days live vs days agreed */
+  .sub-progress { margin-top: 10px; max-width: 420px; }
+  .sub-progress-top {
+    display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px;
+    font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .sub-progress-top strong { color: var(--text); font-weight: 600; }
+  .sub-progress-track {
+    height: 6px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden;
+  }
+  .sub-progress-fill { height: 100%; background: var(--live); border-radius: 999px; }
+  .sub-progress[data-state="done"] .sub-progress-fill { background: var(--past); }
+  .sub-progress[data-state="over"] .sub-progress-fill { background: var(--st-red); }
+  .sub-progress-note { font-size: 11.5px; color: var(--st-orange); margin-top: 4px; }
+  #sub-days-field { margin-top: 15px; }
+  #sub-days-field .days-input { display: flex; align-items: center; gap: 10px; }
+  #sub-days-field input { width: 120px; }
+
   .campaign-notes {
     margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line);
     font-size: 12.5px; color: var(--text-muted); font-style: italic; white-space: pre-wrap;
@@ -401,6 +419,7 @@
   @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
   label.field-label { font-weight: 500; font-size: 13.5px; color: var(--text); }
   input[type="text"], input[type="date"], select { width: 100%; }
+  input[type="number"] { font-variant-numeric: tabular-nums; }
   .required-mark { color: var(--pink); }
 
   .date-range { display: flex; align-items: center; gap: 10px; }
@@ -985,6 +1004,15 @@
         </div>
       </div>
 
+      <div class="field" id="sub-days-field" style="display:none;">
+        <label class="field-label" for="f-subdays">Days agreed <span class="required-mark">*</span></label>
+        <div class="days-input">
+          <input type="number" id="f-subdays" min="1" max="3650" step="1" inputmode="numeric" placeholder="e.g. 30" />
+          <span class="field-hint">days</span>
+        </div>
+        <span class="field-hint" id="sub-days-hint"></span>
+      </div>
+
       <div class="field">
         <span class="field-label">Campaign dates</span>
         <div class="date-range">
@@ -1268,6 +1296,9 @@
     form: document.getElementById('campaign-form'),
     fName: document.getElementById('f-name'),
     fDeal: document.getElementById('f-deal'),
+    fSubDays: document.getElementById('f-subdays'),
+    subDaysField: document.getElementById('sub-days-field'),
+    subDaysHint: document.getElementById('sub-days-hint'),
     fRetarget: document.getElementById('f-retarget'),
     fStart: document.getElementById('f-start'),
     fEnd: document.getElementById('f-end'),
@@ -1434,7 +1465,7 @@
     const groups = new Map();
     rows.forEach(row => {
       const stripped = stripTrailingIndex(row.n);
-      const key = [stripped, row.start, row.end, row.s, row.deal, row.rt, row.rotation, [...row.loc].sort().join(',')].join('|');
+      const key = [stripped, row.start, row.end, row.s, row.deal, row.rt, row.rotation, row.subDays, [...row.loc].sort().join(',')].join('|');
       if (!groups.has(key)) groups.set(key, { ...row, strippedName: stripped, count: 0, memberIds: [] });
       const g = groups.get(key);
       g.count++;
@@ -1508,7 +1539,11 @@
     pill.dataset.status = group.s;
     pill.textContent = group.s === 'Artwork Recieved' ? 'Artwork Received' : group.s;
     meta.appendChild(pill);
-    if (group.deal) { const c = document.createElement('span'); c.className = 'meta-chip'; c.textContent = group.deal; meta.appendChild(c); }
+    if (group.deal) {
+      const c = document.createElement('span'); c.className = 'meta-chip';
+      c.textContent = group.deal === 'Subscription' && group.subDays ? `Subscription · ${group.subDays} days` : group.deal;
+      meta.appendChild(c);
+    }
     if (group.rt) { const c = document.createElement('span'); c.className = 'meta-chip'; c.textContent = group.rt + ' retargeting'; meta.appendChild(c); }
     if (group.loc.length > 1) {
       const c = document.createElement('span'); c.className = 'meta-chip';
@@ -1516,6 +1551,8 @@
       meta.appendChild(c);
     }
     main.appendChild(meta);
+    const sub = !opts.archived && renderSubProgress(group);
+    if (sub) main.appendChild(sub);
     if (group.notes) {
       const notesEl = document.createElement('div');
       notesEl.className = 'campaign-notes';
@@ -1561,6 +1598,63 @@
     card.appendChild(actions);
 
     return card;
+  }
+
+  // Subscription deals sell a number of days. Days live = start date up to today (or the end
+  // date, if that's already passed), counted inclusively; days left = agreed minus that.
+  function subProgress(g) {
+    if (g.deal !== 'Subscription' || !g.subDays) return null;
+    const agreed = g.subDays, today = todayMidnight();
+    const start = parseDate(g.start), end = parseDate(g.end);
+    let live = 0;
+    if (start && start <= today) live = daysBetween(start, end && end < today ? end : today) + 1;
+    const span = start && end && end >= start ? daysBetween(start, end) + 1 : null;
+    return { agreed, live, left: agreed - live, span, started: !!start && start <= today, scheduled: !!start };
+  }
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  function renderSubProgress(group) {
+    const p = subProgress(group);
+    if (!p) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'sub-progress';
+    wrap.dataset.state = p.left < 0 ? 'over' : p.left === 0 ? 'done' : 'live';
+
+    const top = document.createElement('div');
+    top.className = 'sub-progress-top';
+    const used = document.createElement('span');
+    const usedNum = document.createElement('strong');
+    usedNum.textContent = `${p.live} of ${p.agreed}`;
+    used.append(usedNum, ' days live');
+    const left = document.createElement('span');
+    left.textContent = !p.scheduled ? 'No start date yet'
+      : p.left < 0 ? `${plural(-p.left, 'day')} over`
+      : p.left === 0 ? 'All days used'
+      : `${plural(p.left, 'day')} left`;
+    top.append(used, left);
+
+    const track = document.createElement('div');
+    track.className = 'sub-progress-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-label', 'Subscription days live');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', String(p.agreed));
+    track.setAttribute('aria-valuenow', String(Math.min(p.live, p.agreed)));
+    const fill = document.createElement('div');
+    fill.className = 'sub-progress-fill';
+    fill.style.width = Math.min(100, (p.live / p.agreed) * 100) + '%';
+    track.appendChild(fill);
+    wrap.append(top, track);
+
+    // Flag dates that don't add up to the days sold, so it gets spotted before it runs over/short.
+    if (p.span && p.span !== p.agreed) {
+      const note = document.createElement('div');
+      note.className = 'sub-progress-note';
+      const diff = p.span - p.agreed;
+      note.textContent = `Booked dates cover ${plural(p.span, 'day')}, ${plural(Math.abs(diff), 'day')} ${diff > 0 ? 'more' : 'fewer'} than agreed`;
+      wrap.appendChild(note);
+    }
+    return wrap;
   }
 
   async function quickDelete(group) {
@@ -2244,7 +2338,38 @@
     selectedStatus = 'Agreed';
     [...els.statusGroup.children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === 'Agreed')));
     setRotation('1/18');
+    endAutoFilled = false;
+    syncSubDays();
   }
+
+  /* Subscription: "Days agreed" shows only for that deal type. With a start date, it fills the
+     end date in (start + days - 1) unless someone has typed their own end date. */
+  let endAutoFilled = false;
+  function subEndFor(startIso, days) {
+    const start = startIso && parseDate(startIso);
+    return start && days > 0 ? isoDate(addDays(start, days - 1)) : null;
+  }
+  function syncSubDays() {
+    const isSub = els.fDeal.value === 'Subscription';
+    els.subDaysField.style.display = isSub ? '' : 'none';
+    if (!isSub) return;
+    const days = parseInt(els.fSubDays.value, 10);
+    const start = els.fStart.value;
+    const autoEnd = subEndFor(start, days);
+    if (autoEnd && (!els.fEnd.value || endAutoFilled)) { els.fEnd.value = autoEnd; endAutoFilled = true; }
+    let hint = 'Set a start date and the end date fills in from the days agreed.';
+    if (days > 0 && start && els.fEnd.value) {
+      const span = daysBetween(parseDate(start), parseDate(els.fEnd.value)) + 1;
+      hint = span === days
+        ? `Runs ${fmtDate(parseDate(start), true)} → ${fmtDate(parseDate(els.fEnd.value), true)}.`
+        : `The campaign dates cover ${plural(span, 'day')}, not ${days}.`;
+    }
+    els.subDaysHint.textContent = hint;
+  }
+  els.fDeal.addEventListener('change', syncSubDays);
+  els.fSubDays.addEventListener('input', syncSubDays);
+  els.fStart.addEventListener('change', syncSubDays);
+  els.fEnd.addEventListener('change', () => { endAutoFilled = false; syncSubDays(); });
 
   function openModal(mode, group) {
     resetForm();
@@ -2259,6 +2384,10 @@
       els.fRetarget.value = group.rt || '';
       els.fStart.value = group.start || '';
       els.fEnd.value = group.end || '';
+      els.fSubDays.value = group.subDays || '';
+      // If the end date is the one the days would give, keep it following the days when they change.
+      endAutoFilled = !!group.end && group.end === subEndFor(group.start, group.subDays);
+      syncSubDays();
       fillNotesEditor(group.notes);
       selectedStatus = group.s;
       [...els.statusGroup.children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === group.s)));
@@ -2332,7 +2461,7 @@
   async function upsertGroup(formData, existingMemberIds) {
     const target = formData.rotation === '1/6' ? 3 : 1;
     const ids = existingMemberIds ? [...existingMemberIds] : [];
-    const fields = { n: formData.n, s: formData.s, loc: formData.loc, deal: formData.deal, rt: formData.rt, start: formData.start, end: formData.end, notes: formData.notes, rotation: formData.rotation };
+    const fields = { n: formData.n, s: formData.s, loc: formData.loc, deal: formData.deal, rt: formData.rt, start: formData.start, end: formData.end, notes: formData.notes, rotation: formData.rotation, subDays: formData.subDays };
     const ops = [];
     for (let i = 0; i < target; i++) {
       if (i < ids.length) ops.push(patchRow(ids[i], fields));
@@ -2349,6 +2478,9 @@
     if (selectedLocations.length === 0) { showToast('Pick at least one location'); return; }
     const startClean = cleanTypedDate(els.fStart.value), endClean = cleanTypedDate(els.fEnd.value);
     if (startClean.error || endClean.error) { showToast('Check the year on the campaign dates'); return; }
+    const isSub = els.fDeal.value === 'Subscription';
+    const subDays = isSub ? parseInt(els.fSubDays.value, 10) : null;
+    if (isSub && !(subDays >= 1 && subDays <= 3650)) { showToast('Enter the number of days agreed'); els.fSubDays.focus(); return; }
     const formData = {
       n: name,
       s: selectedStatus,
@@ -2359,6 +2491,7 @@
       end: endClean.value,
       notes: notesFromEditor(),
       rotation: selectedRotation,
+      subDays,
     };
     // Extending the end date of a campaign that had already completed (e.g. a renewal)
     // reopens it: the server auto-completes anything past its end date, so without this

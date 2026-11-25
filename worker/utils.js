@@ -28,6 +28,7 @@ export function rowToJson(row) {
     end: row.end,
     notes: row.notes,
     rotation: row.rotation,
+    subDays: row.sub_days ?? null,
     deleted: !!row.deleted,
   };
 }

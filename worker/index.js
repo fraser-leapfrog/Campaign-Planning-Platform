@@ -95,6 +95,29 @@ function normaliseDate(v) {
   return m ? `20${m[1]}-${m[2]}` : v;
 }
 
+// Columns added to `campaigns` after the first release: added to the existing table once.
+//   sub_days — days agreed on a Subscription deal (NULL for every other deal type)
+let campaignSchemaReady = false;
+async function ensureCampaignSchema(env) {
+  if (campaignSchemaReady) return;
+  const cols = (await env.DB.prepare("PRAGMA table_info(campaigns)").all()).results.map((r) => r.name);
+  if (!cols.includes("sub_days")) {
+    try {
+      await env.DB.prepare("ALTER TABLE campaigns ADD COLUMN sub_days INTEGER").run();
+    } catch (e) {
+      if (!/duplicate column/i.test(String(e))) throw e; // a parallel request added it
+    }
+  }
+  campaignSchemaReady = true;
+}
+
+// Days agreed only means something on a Subscription deal: a whole number of days, else NULL.
+function cleanSubDays(deal, v) {
+  if (deal !== "Subscription") return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n > 0 && n <= 3650 ? n : null;
+}
+
 // Keeps each campaign's status in step with its dates, so nobody has to remember
 // to flip it by hand. Runs on every list request (the board polls every 20s and
 // refreshes after every edit), which means a date change is corrected the moment
@@ -142,12 +165,13 @@ async function handleList(request, env) {
   const email = requireAccess(request);
   if (!email) return json({ error: "unauthorized" }, 401);
 
+  await ensureCampaignSchema(env);
   // A failed tidy-up shouldn't stop the board loading.
   try { await reconcileStatuses(env); } catch (err) { console.error("reconcileStatuses failed", err); }
 
   const { results } = await env.DB.prepare(
     `SELECT id, name AS n, status AS s, loc, deal, retarget AS rt,
-            start_date AS "start", end_date AS "end", notes, rotation, deleted
+            start_date AS "start", end_date AS "end", notes, rotation, sub_days, deleted
      FROM campaigns
      ORDER BY (start_date IS NULL), start_date`
   ).all();
@@ -164,10 +188,11 @@ async function handleCreate(request, env) {
     return json({ error: "campaign name is required" }, 400);
   }
 
+  await ensureCampaignSchema(env);
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO campaigns (id, name, status, loc, deal, retarget, start_date, end_date, notes, rotation, deleted)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0)`
+    `INSERT INTO campaigns (id, name, status, loc, deal, retarget, start_date, end_date, notes, rotation, sub_days, deleted)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0)`
   )
     .bind(
       id,
@@ -179,7 +204,8 @@ async function handleCreate(request, env) {
       normaliseDate(body.start) || null,
       normaliseDate(body.end) || null,
       body.notes || null,
-      body.rotation || null
+      body.rotation || null,
+      cleanSubDays(body.deal, body.subDays)
     )
     .run();
 
@@ -218,6 +244,17 @@ async function handlePatch(request, env, id) {
     sets.push("loc = ?");
     values.push(JSON.stringify(normaliseLoc(body.loc)));
   }
+  // Days agreed is kept only on Subscription deals; changing the deal type away clears it.
+  if ("subDays" in body || "deal" in body) {
+    await ensureCampaignSchema(env);
+    if ("deal" in body) {
+      sets.push("sub_days = ?");
+      values.push(cleanSubDays(body.deal, body.subDays));
+    } else {
+      sets.push("sub_days = CASE WHEN deal = 'Subscription' THEN ? ELSE NULL END");
+      values.push(cleanSubDays("Subscription", body.subDays));
+    }
+  }
   if (!sets.length) return json({ error: "no fields to update" }, 400);
 
   sets.push("updated_at = datetime('now')");
@@ -238,13 +275,14 @@ async function handleReplaceAll(request, env) {
   const body = await request.json();
   const rows = Array.isArray(body.rows) ? body.rows : [];
 
+  await ensureCampaignSchema(env);
   const stmts = [env.DB.prepare("DELETE FROM campaigns")];
   for (const r of rows) {
     if (!r || typeof r.n !== "string") continue;
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO campaigns (id, name, status, loc, deal, retarget, start_date, end_date, notes, rotation, deleted)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
+        `INSERT INTO campaigns (id, name, status, loc, deal, retarget, start_date, end_date, notes, rotation, deleted, sub_days)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`
       ).bind(
         typeof r.id === "string" && r.id ? r.id : crypto.randomUUID(),
         r.n,
@@ -256,7 +294,8 @@ async function handleReplaceAll(request, env) {
         normaliseDate(r.end) || null,
         r.notes || null,
         r.rotation || null,
-        r.deleted ? 1 : 0
+        r.deleted ? 1 : 0,
+        cleanSubDays(r.deal, r.subDays)
       )
     );
   }

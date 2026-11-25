@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   end_date TEXT,
   notes TEXT,
   rotation TEXT,                           -- '1/6' | '1/18' | NULL
+  sub_days INTEGER,                        -- days agreed on a Subscription deal (added by ensureCampaignSchema)
   deleted INTEGER NOT NULL DEFAULT 0,      -- 1 = archived
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
