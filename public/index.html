@@ -876,7 +876,7 @@
     <div class="page-head">
       <p class="eyebrow">Analytics</p>
       <h1>Inventory Over Time</h1>
-      <p>Daily booked slot usage at each venue — scheduled and in-flight campaigns only.</p>
+      <p>Daily booked slot usage at each venue — scheduled and in-flight campaigns only. Comp deals are not counted anywhere on this page.</p>
     </div>
 
     <div class="range-row">
@@ -1755,8 +1755,11 @@
   // (any status other than "To Hold") and `hold` ("To Hold" campaigns that already
   // have dates set — provisional bookings) so callers can show them differently;
   // `v` is the combined total, same figure the chart used before the split.
+  // Comp (free) deals are left out: Analytics is a sales view, so every chart, the weekly
+  // report and Past % Sold count paid bookings only. The board's own inventory bar and the
+  // overbooked alert still count comps, since they do take up slots.
   function computeSeriesForLoc(loc, startDate, endDate) {
-    const rows = getAllRows().filter(r => r.loc.includes(loc));
+    const rows = getAllRows().filter(r => r.loc.includes(loc) && r.deal !== 'Comp');
     const groups = groupRows(rows);
     const totalDays = daysBetween(startDate, endDate);
     const series = [];
