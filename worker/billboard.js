@@ -74,6 +74,11 @@ const SEED_SCREENS = [
   ["WMC - North", "Wales Millennium Centre", 127312, "Leapfrog", "JBNB000013", 5880, 1960],
   ["WMC - Middle", "Wales Millennium Centre", 127313, "Leapfrog", "JBNB000013", 5880, 1960],
   ["WMC - South", "Wales Millennium Centre", 127314, "Leapfrog", "JBNB000013", 5880, 1960],
+  // Kingsway Centre, Newport (added 2026-11-26 on the live DB by hand; listed here for fresh installs).
+  // 10s ads: 1/6 = 60 plays/hr, 1/18 = 20/hr; open Mon-Sat 9-6 + Sun 10-6 = 62 h/week. No JamBox yet.
+  ["Kingsway WM North", "Kingsway Centre, Newport", 135011, null, null, 3720, 1240],
+  ["Kingsway WM South", "Kingsway Centre, Newport", 135012, null, null, 3720, 1240],
+  ["Kingsway Totem", "Kingsway Centre, Newport", 135013, null, null, 3720, 1240],
 ];
 const SEED_CAMPAIGNS = [{
   client_name: "National Waterfront Museum", start_date: "2026-10-01", end_date: "2026-12-07",
@@ -108,7 +113,7 @@ const ADDED_CAMPAIGN_COLUMNS = [
 const BOARD_SYNC_FROM = "2026-11-01";
 
 // Board venue -> words that identify its screens (matched against screen location + name).
-const VENUE_ALIASES = { wmc: ["wmc", "wales millennium centre"] };
+const VENUE_ALIASES = { wmc: ["wmc", "wales millennium centre"], "kingsway centre": ["kingsway"] };
 
 let schemaReady = false;
 

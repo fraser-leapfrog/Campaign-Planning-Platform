@@ -1403,6 +1403,8 @@
     { key: 'WMC', slug: 'wmc', capacity: 9 },
     { key: 'Quadrant Shopping Centre', slug: 'quadrant', capacity: 18 },
     { key: 'Parc Tawe Retail Park', slug: 'parc-tawe', capacity: 18 },
+    // Newport (added 2026-11-26): WM North, WM South and Totem screens, booked as one venue.
+    { key: 'Kingsway Centre', slug: 'kingsway', capacity: 15 },
   ];
   const CAPACITY = Object.fromEntries(LOCATIONS.map(l => [l.key, l.capacity]));
   const slugOf = (loc) => LOCATIONS.find(l => l.key === loc).slug;

@@ -24,11 +24,12 @@ import {
 } from "./billboard.js";
 
 // Keep in step with LOCATIONS in public/index.html (the board's venue capacities).
-const CAPACITY = { "WMC": 9, "Quadrant Shopping Centre": 18, "Parc Tawe Retail Park": 18 };
+const CAPACITY = { "WMC": 9, "Quadrant Shopping Centre": 18, "Parc Tawe Retail Park": 18, "Kingsway Centre": 15 };
 const HOLD_DAYS = 7;
 const OVERDUE_DAYS = 7;
 const ARTWORK_DAYS = 3;
 const SCREEN_OFFLINE_HOURS = 2;
+const NEVER_SEEN_BEFORE = Date.UTC(2000, 0, 1);   // LastNotify earlier than this = never checked in
 const JAMBOX_OFFLINE_HOURS = 24;
 const UNDERDELIVERY_HOUR = 8;      // UK hour after which the daily under-delivery check runs
 const UNDERDELIVERY_REPEAT = 3;    // remind at most every 3 days while a campaign is behind
@@ -232,7 +233,7 @@ function parseNavoriTime(s) {
 
 async function checkScreens(env) {
   const players = (await new Navori(env).players()).filter((p) => p.Active);
-  const times = players.map((p) => parseNavoriTime(p.LastNotify)).filter((t) => t !== null);
+  const times = players.map((p) => parseNavoriTime(p.LastNotify)).filter((t) => t !== null && t >= NEVER_SEEN_BEFORE);
   if (!times.length) return;
   const now = Date.now();
   const freshest = Math.max(...times);
@@ -240,6 +241,12 @@ async function checkScreens(env) {
   const stmts = [];
   for (const p of players) {
     const t = parseNavoriTime(p.LastNotify);
+    // A player that has never checked in (Navori sends 0001-01-01) hasn't been installed yet,
+    // e.g. a new venue's screens before go-live, so it isn't "offline". Clear any old alert quietly.
+    if (t === null || t < NEVER_SEEN_BEFORE) {
+      stmts.push(env.DB.prepare("DELETE FROM notification_state WHERE key = ?").bind(`screen-offline:${p.Id}`));
+      continue;
+    }
     const seen = t === null ? null : t + offsetH * 3600e3;
     const offline = seen === null || now - seen > SCREEN_OFFLINE_HOURS * 3600e3;
     const sk = `screen-offline:${p.Id}`;
