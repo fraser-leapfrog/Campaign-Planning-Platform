@@ -546,6 +546,7 @@
   .chart-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
   .chart-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .chart-legend-swatch[data-kind="confirmed"] { background: var(--purple); }
+  .chart-legend-swatch[data-kind="comp"] { background: var(--st-blue); }
   .chart-legend-swatch[data-kind="hold"] { background: var(--st-orange); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.55) 0 2px, transparent 2px 4px); }
   .chart-tooltip {
     position: absolute; left: 0; top: 0; opacity: 0; transform: translate(-50%, calc(-100% - 12px));
@@ -556,6 +557,7 @@
   .chart-tooltip.show { opacity: 1; }
   .chart-tooltip .tt-value { font-weight: 700; margin-top: 1px; }
   .chart-tooltip .tt-hold { font-weight: 500; margin-top: 1px; color: var(--st-orange); }
+  .chart-tooltip .tt-comp { font-weight: 500; margin-top: 1px; color: var(--st-blue); }
 
   /* ---------- Marketing Planner (separate tool from the campaign board) ---------- */
   .idea-board-card { margin-bottom: 20px; }
@@ -876,7 +878,7 @@
     <div class="page-head">
       <p class="eyebrow">Analytics</p>
       <h1>Inventory Over Time</h1>
-      <p>Daily booked slot usage at each venue — scheduled and in-flight campaigns only. Comp deals are not counted anywhere on this page.</p>
+      <p>Daily booked slot usage at each venue — scheduled and in-flight campaigns only. Comp deals show in the charts (blue) but are left out of Past % Sold and Weekly Occupancy, which count paid bookings only.</p>
     </div>
 
     <div class="range-row">
@@ -890,6 +892,7 @@
 
     <div class="chart-legend">
       <span class="chart-legend-item"><span class="chart-legend-swatch" data-kind="confirmed"></span>Confirmed</span>
+      <span class="chart-legend-item"><span class="chart-legend-swatch" data-kind="comp"></span>Comp (free)</span>
       <span class="chart-legend-item"><span class="chart-legend-swatch" data-kind="hold"></span>Hold with dates (unconfirmed)</span>
     </div>
 
@@ -1755,28 +1758,39 @@
   // (any status other than "To Hold") and `hold` ("To Hold" campaigns that already
   // have dates set — provisional bookings) so callers can show them differently;
   // `v` is the combined total, same figure the chart used before the split.
-  // Comp (free) deals are left out: Analytics is a sales view, so every chart, the weekly
-  // report and Past % Sold count paid bookings only. The board's own inventory bar and the
-  // overbooked alert still count comps, since they do take up slots.
+  // Comp (free) deals that aren't on hold go in their own `comp` count: the daily charts
+  // show them as a separate band (they do take up slots, same as on the board), while the
+  // backward-looking sales reports (Weekly Occupancy, Past % Sold) use `paid`, which leaves
+  // them out. A comp still "To Hold" counts as a hold, since it isn't booked yet.
   function computeSeriesForLoc(loc, startDate, endDate) {
-    const rows = getAllRows().filter(r => r.loc.includes(loc) && r.deal !== 'Comp');
+    const rows = getAllRows().filter(r => r.loc.includes(loc));
     const groups = groupRows(rows);
     const totalDays = daysBetween(startDate, endDate);
     const series = [];
     for (let i = 0; i <= totalDays; i++) {
       const day = addDays(startDate, i);
-      let confirmed = 0, hold = 0;
+      let confirmed = 0, hold = 0, comp = 0, compHold = 0;
       groups.forEach(g => {
         const gs = parseDate(g.start), ge = parseDate(g.end);
         if (!gs && !ge) return; // unscheduled — excluded from inventory, same as the board
         if (ge && ge < day) return; // already ended
         if (gs && gs > day) return; // not started yet
-        if (g.s === 'To Hold') hold += inventoryWeight(g);
+        const isComp = g.deal === 'Comp';
+        if (g.s === 'To Hold') { hold += inventoryWeight(g); if (isComp) compHold += inventoryWeight(g); }
+        else if (isComp) comp += inventoryWeight(g);
         else confirmed += inventoryWeight(g);
       });
-      series.push({ date: day, confirmed, hold, v: confirmed + hold });
+      series.push({ date: day, confirmed, comp, hold, v: confirmed + comp + hold, paid: confirmed + hold - compHold });
     }
     return series;
+  }
+
+  // " (2 comp, 1 on hold)" — the non-confirmed parts of a day's total, for chart labels.
+  function extrasNote(p) {
+    const bits = [];
+    if (p.comp > 0) bits.push(`${p.comp} comp`);
+    if (p.hold > 0) bits.push(`${p.hold} on hold`);
+    return bits.length ? ` (${bits.join(', ')})` : '';
   }
 
   function renderChart(loc, startDate, endDate) {
@@ -1797,12 +1811,26 @@
     // differently-coloured layer stacked on top so provisional bookings are visible
     // but visually distinct from confirmed occupancy.
     const confPts = series.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.confirmed).toFixed(1)}`);
+    const compTopPts = series.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.confirmed + p.comp).toFixed(1)}`);
     const totPts = series.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.v).toFixed(1)}`);
     const lineD = `M ${confPts.join(' L ')}`;
-    const totalLineD = `M ${totPts.join(' L ')}`;
     const areaD = `M ${xAt(0).toFixed(1)},${yAt(0).toFixed(1)} L ${confPts.join(' L ')} L ${xAt(totalDays).toFixed(1)},${yAt(0).toFixed(1)} Z`;
     const hasHold = series.some(p => p.hold > 0);
-    const holdAreaD = `M ${confPts.join(' L ')} L ${totPts.slice().reverse().join(' L ')} Z`;
+    const hasComp = series.some(p => p.comp > 0);
+    const compAreaD = `M ${confPts.join(' L ')} L ${compTopPts.slice().reverse().join(' L ')} Z`;
+    // Top edges only where that band exists, so a band's line never runs along (and hides)
+    // the one below it on days it's empty.
+    const runsWhere = (pts, has) => {
+      let d = '', open = false;
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (has(series[i]) || has(series[i + 1])) { d += open ? ` L ${pts[i + 1]}` : ` M ${pts[i]} L ${pts[i + 1]}`; open = true; }
+        else open = false;
+      }
+      return d.trim();
+    };
+    const compLineD = runsWhere(compTopPts, p => p.comp > 0);
+    const holdLineD = runsWhere(totPts, p => p.hold > 0);
+    const holdAreaD = `M ${compTopPts.join(' L ')} L ${totPts.slice().reverse().join(' L ')} Z`;
 
     const todayIdx = daysBetween(startDate, todayMidnight());
     const hasToday = todayIdx >= 0 && todayIdx <= totalDays;
@@ -1833,11 +1861,16 @@
     // Area + line (confirmed, bottom layer)
     svg += `<path d="${areaD}" fill="var(--purple)" fill-opacity="0.1" stroke="none" />`;
     svg += `<path d="${lineD}" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
-    // Hold-with-dates band, stacked on top of confirmed — dashed top edge so it
+    // Comp band (free bookings), stacked on confirmed in its own colour.
+    if (hasComp) {
+      svg += `<path d="${compAreaD}" fill="var(--st-blue)" fill-opacity="0.28" stroke="none" />`;
+      svg += `<path d="${compLineD}" fill="none" stroke="var(--st-blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
+    }
+    // Hold-with-dates band, stacked on top of confirmed + comp — dashed top edge so it
     // reads as provisional rather than booked.
     if (hasHold) {
       svg += `<path d="${holdAreaD}" fill="var(--st-orange)" fill-opacity="0.28" stroke="none" />`;
-      svg += `<path d="${totalLineD}" fill="none" stroke="var(--st-orange)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" />`;
+      svg += `<path d="${holdLineD}" fill="none" stroke="var(--st-orange)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" />`;
     }
     // Today end-marker + direct label — sits at the total (confirmed + hold) height,
     // coloured orange when today includes any hold-with-dates slots.
@@ -1845,12 +1878,12 @@
       const todayPoint = series[todayIdx];
       const tv = todayPoint.v;
       const todayHasHold = todayPoint.hold > 0;
-      const markerColor = todayHasHold ? 'var(--st-orange)' : 'var(--purple)';
+      const markerColor = todayHasHold ? 'var(--st-orange)' : todayPoint.comp > 0 ? 'var(--st-blue)' : 'var(--purple)';
       const cx = xAt(todayIdx), cy = yAt(tv);
       svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6.5" fill="var(--surface)" />`;
       svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="${markerColor}" />`;
       const labelY = cy < MT + 16 ? cy + 16 : cy - 10;
-      const label = todayHasHold ? `${tv}/${capacity} (${todayPoint.hold} on hold)` : `${tv}/${capacity}`;
+      const label = `${tv}/${capacity}${extrasNote(todayPoint)}`;
       svg += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)">${label}</text>`;
     }
     // Hover crosshair (hidden until pointer moves) + hit area
@@ -1869,9 +1902,7 @@
       const todayPoint = series[todayIdx];
       const tv = todayPoint.v;
       const pct = capacity ? Math.round((tv / capacity) * 100) : 0;
-      todayEl.textContent = todayPoint.hold > 0
-        ? `Today · ${tv}/${capacity} slots · ${pct}% (${todayPoint.hold} on hold)`
-        : `Today · ${tv}/${capacity} slots · ${pct}%`;
+      todayEl.textContent = `Today · ${tv}/${capacity} slots · ${pct}%${extrasNote(todayPoint)}`;
     } else {
       todayEl.textContent = '';
     }
@@ -1901,7 +1932,7 @@
       chLine.setAttribute('x1', px.toFixed(1)); chLine.setAttribute('x2', px.toFixed(1));
       chRing.setAttribute('cx', px.toFixed(1)); chRing.setAttribute('cy', py.toFixed(1));
       chDot.setAttribute('cx', px.toFixed(1)); chDot.setAttribute('cy', py.toFixed(1));
-      chDot.setAttribute('fill', point.hold > 0 ? 'var(--st-orange)' : 'var(--purple)');
+      chDot.setAttribute('fill', point.hold > 0 ? 'var(--st-orange)' : point.comp > 0 ? 'var(--st-blue)' : 'var(--purple)');
       tooltip.innerHTML = '';
       const dateLine = document.createElement('div');
       dateLine.textContent = fmtDate(point.date, true);
@@ -1910,6 +1941,12 @@
       valueLine.textContent = `${point.v} / ${capacity} slots`;
       tooltip.appendChild(dateLine);
       tooltip.appendChild(valueLine);
+      if (point.comp > 0) {
+        const compLine = document.createElement('div');
+        compLine.className = 'tt-comp';
+        compLine.textContent = `incl. ${point.comp} comp (free)`;
+        tooltip.appendChild(compLine);
+      }
       if (point.hold > 0) {
         const holdLine = document.createElement('div');
         holdLine.className = 'tt-hold';
@@ -2008,7 +2045,7 @@
       const key = isoDate(ws);
       if (!weeks.has(key)) weeks.set(key, { start: ws, sum: 0, count: 0 });
       const w = weeks.get(key);
-      w.sum += point.v;
+      w.sum += point.paid; // paid only — comps left out of the sales report
       w.count += 1;
     });
     const thisWeekKey = isoDate(startOfWeek(todayMidnight()));
@@ -2113,7 +2150,7 @@
     const capacity = CAPACITY[loc] || 0;
     if (!capacity) return 0;
     const series = computeSeriesForLoc(loc, start, end);
-    const sum = series.reduce((a, p) => a + p.v, 0);
+    const sum = series.reduce((a, p) => a + p.paid, 0); // paid only — comps left out
     return Math.round((sum / (series.length * capacity)) * 100);
   }
 
